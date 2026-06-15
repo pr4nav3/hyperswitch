@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "rustfmt": {
+      "returncode": 101,
+      "elapsed_seconds": 0.26,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "error: no such command: `+nightly`\n\nhelp: invoke `cargo` through `rustup` to handle `+toolchain` directives\n"
+    },
+    "cargo_check_affected": {
+      "returncode": 0,
+      "elapsed_seconds": 241.64,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "    Checking diesel v2.2.10\n    Checking masking v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/masking)\n    Checking masking v0.1.0 (https://github.com/juspay/hyperswitch?tag=2025.11.24.0#19723f8c)\n    Checking async-bb8-diesel v0.2.1\n    Checking ucs_common_utils v0.1.0 (https://github.com/juspay/connector-service?rev=7b0308793095fd908fae2fe9bc3fa6ee39f73693#7b030879)\n    Checking common_enums v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/common_enums)\n    Checking events v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/events)\n    Checking ucs_cards v0.1.0 (https://github.com/juspay/connector-service?rev=7b0308793095fd908fae2fe9bc3fa6ee39f73693#7b030879)\n    Checking grpc-api-types v0.1.0 (https://github.com/juspay/connector-service?rev=7b0308793095fd908fae2fe9bc3fa6ee39f73693#7b030879)\n    Checking common_utils v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/common_utils)\n    Checking currency_conversion v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/currency_conversion)\n    Checking rust-grpc-client v0.1.0 (https://github.com/juspay/connector-service?rev=7b0308793095fd908fae2fe9bc3fa6ee39f73693#7b030879)\n    Checking euclid v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/euclid)\n    Checking cards v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/cards)\n    Checking redis_interface v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/redis_interface)\n    Checking common_types v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0006_pr_11038/crates/common_types)\n    Checking api_models v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/wo"
+    }
+  },
+  "summary": {
+    "passed": 1,
+    "total": 2
+  }
+}

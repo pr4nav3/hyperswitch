@@ -1,0 +1,17 @@
+{
+  "reasoning": "The agent patch functionally matches the reference patch exactly for all six configuration files. Stripe is correctly prepended to the wallet.google_pay connector_list in both sections of config.example.toml and to both wallet.apple_pay and wallet.google_pay in the five deployment environment configs (integration_test, production, sandbox, development, docker_compose). All stated requirements are addressed, and the TOML syntax remains consistent with surrounding style. The only issue is the inclusion of an unrelated artifact file `.omo/run-continuation/ses_1397bc469ffe4YMFTAL9enW68A.json`, which is a temp/session file from the agent framework and should not be part of the commit. This is a minor but clear hygiene lapse.",
+  "correctness": 10,
+  "completeness": 10,
+  "convention_adherence": 10,
+  "hygiene": 7,
+  "overall": 9.55,
+  "summary": "Correctly adds Stripe to Apple Pay and Google Pay connector lists across all required config files, but unnecessarily includes an unrelated OpenCode session artifact file.",
+  "correctness_bugs": [],
+  "missing_requirements": [],
+  "convention_violations": [],
+  "style_deviations": [],
+  "improvements_beyond_reference": [],
+  "parse_error": false,
+  "returncode": 0,
+  "judge_id": 4
+}

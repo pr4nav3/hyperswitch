@@ -1,0 +1,17 @@
+{
+  "repo": "juspay/hyperswitch",
+  "pr_number": 8729,
+  "pr_url": "https://github.com/juspay/hyperswitch/pull/8729",
+  "base_sha": "6214aca5f0f5c617a68f65ef5bcfd700060acccf",
+  "head_sha": "920a98b3ae378fe396dfe08afbcbe4939fe632a3",
+  "selected_task_source": "critic",
+  "quality_flags": [
+    {
+      "code": "noisy_commit_messages",
+      "messages": [
+        "chore: fix clippy"
+      ]
+    }
+  ],
+  "source_path": ".hs-rl-work/prs/juspay__hyperswitch__8729/row.dataset.json"
+}

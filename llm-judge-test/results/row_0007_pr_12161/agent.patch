@@ -1,0 +1,73 @@
+diff --git a/.omo/run-continuation/ses_1393860d3ffeFYNAkvXqC5fXdV.json b/.omo/run-continuation/ses_1393860d3ffeFYNAkvXqC5fXdV.json
+new file mode 100644
+index 0000000000..5c188158a9
+--- /dev/null
++++ b/.omo/run-continuation/ses_1393860d3ffeFYNAkvXqC5fXdV.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_1393860d3ffeFYNAkvXqC5fXdV",
++  "updatedAt": "2026-06-14T15:39:14.305Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T15:39:14.305Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/crates/hyperswitch_connectors/src/connectors/truelayer.rs b/crates/hyperswitch_connectors/src/connectors/truelayer.rs
+index 559cbf3e59..c4f260e51a 100644
+--- a/crates/hyperswitch_connectors/src/connectors/truelayer.rs
++++ b/crates/hyperswitch_connectors/src/connectors/truelayer.rs
+@@ -1063,7 +1063,10 @@ impl webhooks::IncomingWebhook for Truelayer {
+ 
+ static TRUELAYER_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> =
+     LazyLock::new(|| {
+-        let supported_capture_methods = vec![enums::CaptureMethod::Automatic];
++        let supported_capture_methods = vec![
++            enums::CaptureMethod::Automatic,
++            enums::CaptureMethod::Manual,
++        ];
+ 
+         let mut truelayer_supported_payment_methods = SupportedPaymentMethods::new();
+         truelayer_supported_payment_methods.add(
+diff --git a/crates/hyperswitch_connectors/src/connectors/trustly.rs b/crates/hyperswitch_connectors/src/connectors/trustly.rs
+index 1faca9f824..ddecdabf78 100644
+--- a/crates/hyperswitch_connectors/src/connectors/trustly.rs
++++ b/crates/hyperswitch_connectors/src/connectors/trustly.rs
+@@ -906,7 +906,7 @@ impl webhooks::IncomingWebhook for Trustly {
+ }
+ 
+ static TRUSTLY_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> = LazyLock::new(|| {
+-    let supported_capture_methods = vec![enums::CaptureMethod::Automatic];
++    let supported_capture_methods = vec![enums::CaptureMethod::Automatic, enums::CaptureMethod::Manual];
+ 
+     let mut trustly_supported_payment_methods = SupportedPaymentMethods::new();
+     trustly_supported_payment_methods.add(
+diff --git a/crates/payment_methods/src/configs/payment_connector_required_fields.rs b/crates/payment_methods/src/configs/payment_connector_required_fields.rs
+index 2ee33c2cec..e2498e36d9 100644
+--- a/crates/payment_methods/src/configs/payment_connector_required_fields.rs
++++ b/crates/payment_methods/src/configs/payment_connector_required_fields.rs
+@@ -1745,10 +1745,10 @@ fn get_bank_redirect_required_fields(
+         ),
+         (
+             enums::PaymentMethodType::OpenBanking,
+-            connectors(vec![(
+-                Connector::Volt,
+-                fields(vec![], billing_name(), vec![]),
+-            )]),
++            connectors(vec![
++                (Connector::Volt, fields(vec![], billing_name(), vec![])),
++                (Connector::Truelayer, fields(vec![], billing_name(), vec![])),
++            ]),
+         ),
+         (
+             enums::PaymentMethodType::Trustly,
+@@ -1770,6 +1770,7 @@ fn get_bank_redirect_required_fields(
+                         common: HashMap::new(),
+                     },
+                 ),
++                (Connector::Trustly, fields(vec![], billing_name(), vec![])),
+             ]),
+         ),
+         (

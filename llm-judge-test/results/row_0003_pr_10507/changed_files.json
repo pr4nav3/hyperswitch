@@ -1,0 +1,8 @@
+[
+  ".omo/run-continuation/ses_13993539fffeCK2AU6uZkpatP8.json",
+  "crates/api_models/src/payments.rs",
+  "crates/connector_configs/toml/development.toml",
+  "crates/connector_configs/toml/production.toml",
+  "crates/connector_configs/toml/sandbox.toml",
+  "crates/hyperswitch_domain_models/src/payments.rs"
+]

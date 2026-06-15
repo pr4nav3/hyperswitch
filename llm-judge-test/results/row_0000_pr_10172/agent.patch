@@ -1,0 +1,157 @@
+diff --git a/.omo/run-continuation/ses_139e88bd4ffeOW0e2nhVosobv6.json b/.omo/run-continuation/ses_139e88bd4ffeOW0e2nhVosobv6.json
+new file mode 100644
+index 0000000000..125fe23db1
+--- /dev/null
++++ b/.omo/run-continuation/ses_139e88bd4ffeOW0e2nhVosobv6.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_139e88bd4ffeOW0e2nhVosobv6",
++  "updatedAt": "2026-06-14T12:26:59.372Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T12:26:59.372Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/crates/hyperswitch_connectors/src/connectors/bambora/transformers.rs b/crates/hyperswitch_connectors/src/connectors/bambora/transformers.rs
+index e6dbbdd8c7..209e45d411 100644
+--- a/crates/hyperswitch_connectors/src/connectors/bambora/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/bambora/transformers.rs
+@@ -288,6 +288,21 @@ where
+     Ok(res)
+ }
+ 
++fn deserialize_empty_string_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
++where
++    D: Deserializer<'de>,
++    T: Deserialize<'de>,
++{
++    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
++    match value {
++        Some(serde_json::Value::String(s)) if s.is_empty() => Ok(None),
++        Some(v) => T::deserialize(v)
++            .map(Some)
++            .map_err(serde::de::Error::custom),
++        None => Ok(None),
++    }
++}
++
+ #[derive(Debug, Clone, Deserialize, Serialize)]
+ #[serde(untagged)]
+ pub enum BamboraResponse {
+@@ -311,17 +326,25 @@ pub struct BamboraPaymentsResponse {
+     order_number: String,
+     #[serde(rename = "type")]
+     payment_type: String,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     comments: Option<String>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     batch_number: Option<String>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     total_refunds: Option<f32>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     total_completions: Option<f32>,
+     payment_method: String,
+     card: CardData,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     billing: Option<AddressData>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     shipping: Option<AddressData>,
+     custom: CustomData,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     adjusted_by: Option<Vec<AdjustedBy>>,
+     links: Vec<Links>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     risk_score: Option<f32>,
+ }
+ 
+@@ -350,17 +373,25 @@ pub struct CardResponse {
+ 
+ #[derive(Default, Debug, Clone, Deserialize, PartialEq, Serialize)]
+ pub struct CardData {
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     name: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     expiry_month: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     expiry_year: Option<Secret<String>>,
+     card_type: String,
+     last_four: Secret<String>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     card_bin: Option<Secret<String>>,
+     avs_result: String,
+     cvd_result: String,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     cavv_result: Option<String>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     address_match: Option<i32>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     postal_result: Option<i32>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     avs: Option<AvsObject>,
+ }
+ 
+@@ -373,14 +404,23 @@ pub struct AvsObject {
+ 
+ #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+ pub struct AddressData {
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     name: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     address_line1: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     address_line2: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     city: Option<String>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     province: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     country: Option<enums::CountryAlpha2>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     postal_code: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     phone_number: Option<Secret<String>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     email_address: Option<Email>,
+ }
+ 
+@@ -710,17 +750,25 @@ pub struct RefundResponse {
+     pub order_number: String,
+     #[serde(rename = "type")]
+     pub payment_type: String,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub comments: Option<String>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub batch_number: Option<String>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub total_refunds: Option<f32>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub total_completions: Option<f32>,
+     pub payment_method: String,
+     pub card: CardData,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub billing: Option<AddressData>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub shipping: Option<AddressData>,
+     pub custom: CustomData,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub adjusted_by: Option<Vec<AdjustedBy>>,
+     pub links: Vec<Links>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub risk_score: Option<f32>,
+ }
+ 
+@@ -772,8 +820,11 @@ pub struct BamboraErrorResponse {
+     pub category: i32,
+     pub message: String,
+     pub reference: String,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub details: Option<Vec<ErrorDetail>>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub validation: Option<CardValidation>,
++    #[serde(default, deserialize_with = "deserialize_empty_string_as_none")]
+     pub card: Option<CardError>,
+ }
+ 

@@ -1,0 +1,186 @@
+diff --git a/.omo/run-continuation/ses_139c9d252ffe6Q7gmlPj6xqaae.json b/.omo/run-continuation/ses_139c9d252ffe6Q7gmlPj6xqaae.json
+new file mode 100644
+index 0000000000..24c7cee672
+--- /dev/null
++++ b/.omo/run-continuation/ses_139c9d252ffe6Q7gmlPj6xqaae.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_139c9d252ffe6Q7gmlPj6xqaae",
++  "updatedAt": "2026-06-14T13:04:57.127Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T13:04:57.127Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/.omo/run-continuation/ses_139c9e128ffePxx7ubvE6m7w7g.json b/.omo/run-continuation/ses_139c9e128ffePxx7ubvE6m7w7g.json
+new file mode 100644
+index 0000000000..3dfcd8d05f
+--- /dev/null
++++ b/.omo/run-continuation/ses_139c9e128ffePxx7ubvE6m7w7g.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_139c9e128ffePxx7ubvE6m7w7g",
++  "updatedAt": "2026-06-14T13:00:48.720Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T13:00:48.720Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/.omo/run-continuation/ses_139ca24faffespzzSbAtCSgKuh.json b/.omo/run-continuation/ses_139ca24faffespzzSbAtCSgKuh.json
+new file mode 100644
+index 0000000000..8e0607006b
+--- /dev/null
++++ b/.omo/run-continuation/ses_139ca24faffespzzSbAtCSgKuh.json
+@@ -0,0 +1,11 @@
++{
++  "sessionID": "ses_139ca24faffespzzSbAtCSgKuh",
++  "updatedAt": "2026-06-14T13:03:41.967Z",
++  "sources": {
++    "background-task": {
++      "state": "active",
++      "reason": "1 background task(s) active",
++      "updatedAt": "2026-06-14T13:03:41.967Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/crates/hyperswitch_connectors/src/connectors/stripe.rs b/crates/hyperswitch_connectors/src/connectors/stripe.rs
+index 078eb86943..d56740015a 100644
+--- a/crates/hyperswitch_connectors/src/connectors/stripe.rs
++++ b/crates/hyperswitch_connectors/src/connectors/stripe.rs
+@@ -182,7 +182,8 @@ impl ConnectorCommon for Stripe {
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message,
+             attempt_status: None,
+@@ -376,7 +377,8 @@ impl ConnectorIntegration<CreateConnectorCustomer, ConnectorCustomerData, Paymen
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -528,7 +530,8 @@ impl ConnectorIntegration<PaymentMethodToken, PaymentMethodTokenizationData, Pay
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -688,7 +691,8 @@ impl ConnectorIntegration<Capture, PaymentsCaptureData, PaymentsResponseData> fo
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -856,7 +860,8 @@ impl ConnectorIntegration<PSync, PaymentsSyncData, PaymentsResponseData> for Str
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -1030,7 +1035,8 @@ impl ConnectorIntegration<Authorize, PaymentsAuthorizeData, PaymentsResponseData
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -1394,7 +1400,8 @@ impl ConnectorIntegration<Void, PaymentsCancelData, PaymentsResponseData> for St
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -1536,7 +1543,8 @@ impl ConnectorIntegration<SetupMandate, SetupMandateRequestData, PaymentsRespons
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -1702,7 +1710,8 @@ impl ConnectorIntegration<Execute, RefundsData, RefundsResponseData> for Stripe
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -1834,7 +1843,8 @@ impl ConnectorIntegration<RSync, RefundsData, RefundsResponseData> for Stripe {
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -1978,7 +1988,8 @@ impl ConnectorIntegration<Upload, UploadFileRequestData, UploadFileResponse> for
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -2079,7 +2090,8 @@ impl ConnectorIntegration<Retrieve, RetrieveFileRequestData, RetrieveFileRespons
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response
+@@ -2205,7 +2217,8 @@ impl ConnectorIntegration<Evidence, SubmitEvidenceRequestData, SubmitEvidenceRes
+                 .unwrap_or_else(|| NO_ERROR_CODE.to_string()),
+             message: response
+                 .error
+-                .code
++                .message
++                .clone()
+                 .unwrap_or_else(|| NO_ERROR_MESSAGE.to_string()),
+             reason: response.error.message.map(|message| {
+                 response

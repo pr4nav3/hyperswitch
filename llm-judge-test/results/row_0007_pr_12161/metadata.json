@@ -1,0 +1,10 @@
+{
+  "repo": "juspay/hyperswitch",
+  "pr_number": 12161,
+  "pr_url": "https://github.com/juspay/hyperswitch/pull/12161",
+  "base_sha": "5ad16731564ce4c9ffdb9abfb40c5603b6d154e1",
+  "head_sha": "b7a3760b4c0b0ee16c5abedcd890ba8c21e06c95",
+  "selected_task_source": "critic",
+  "quality_flags": [],
+  "source_path": ".hs-rl-work/prs/juspay__hyperswitch__12161/row.dataset.json"
+}

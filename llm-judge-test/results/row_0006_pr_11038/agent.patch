@@ -1,0 +1,50 @@
+diff --git a/.omo/run-continuation/ses_1395469f6ffeEifRTb83uft6Aa.json b/.omo/run-continuation/ses_1395469f6ffeEifRTb83uft6Aa.json
+new file mode 100644
+index 0000000000..0fe11d9f16
+--- /dev/null
++++ b/.omo/run-continuation/ses_1395469f6ffeEifRTb83uft6Aa.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_1395469f6ffeEifRTb83uft6Aa",
++  "updatedAt": "2026-06-14T15:10:49.506Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T15:10:49.506Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/.omo/run-continuation/ses_13954fa70ffeUsn6nhL9yqvTr8.json b/.omo/run-continuation/ses_13954fa70ffeUsn6nhL9yqvTr8.json
+new file mode 100644
+index 0000000000..033e3affd9
+--- /dev/null
++++ b/.omo/run-continuation/ses_13954fa70ffeUsn6nhL9yqvTr8.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_13954fa70ffeUsn6nhL9yqvTr8",
++  "updatedAt": "2026-06-14T15:11:26.056Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T15:11:26.056Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/crates/router/src/core/payments/operations/payment_response.rs b/crates/router/src/core/payments/operations/payment_response.rs
+index edccc97be4..450866b0db 100644
+--- a/crates/router/src/core/payments/operations/payment_response.rs
++++ b/crates/router/src/core/payments/operations/payment_response.rs
+@@ -145,6 +145,11 @@ impl<F: Send + Clone> PostUpdateTracker<F, PaymentData<F>, types::PaymentsAuthor
+     where
+         F: 'b + Clone + Send + Sync,
+     {
++        // Only save payment method if the payment is configured for future reuse
++        if resp.request.setup_future_usage.is_none() {
++            return Ok(());
++        }
++
+         let customer_id = payment_data.payment_intent.customer_id.clone();
+         let save_payment_data = tokenization::SavePaymentMethodData::from(resp);
+         let payment_method_billing_address = payment_data.address.get_payment_method_billing();

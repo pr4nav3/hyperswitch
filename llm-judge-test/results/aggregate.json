@@ -1,0 +1,12 @@
+{
+  "dataset": "benchmark_10.jsonl",
+  "model": "litellm/kimi-latest",
+  "judge_model": "litellm/kimi-latest",
+  "total_selected": 10,
+  "ok": 9,
+  "errors": 1,
+  "mean_file_f1": 0.664,
+  "mean_style_score": 10.0,
+  "mean_judge_overall": 7.701,
+  "summary_jsonl": "results/summary.jsonl"
+}

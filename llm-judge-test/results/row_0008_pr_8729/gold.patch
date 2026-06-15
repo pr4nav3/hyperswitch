@@ -1,0 +1,129 @@
+From 69c400c76aa8c7796ac382a12c0d720acf49e2ea Mon Sep 17 00:00:00 2001
+From: Kashif <kashif.dev@protonmail.com>
+Date: Wed, 23 Jul 2025 14:55:20 +0530
+Subject: [PATCH 1/2] fix(payment-methods): fetch payment method details in
+ payouts flow
+
+---
+ crates/payment_methods/src/controller.rs        |  6 ++++++
+ crates/router/src/core/payment_methods/cards.rs | 17 ++++++++++++++++-
+ crates/router/src/core/payouts/validator.rs     |  3 ++-
+ 3 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/crates/payment_methods/src/controller.rs b/crates/payment_methods/src/controller.rs
+index bd5a9f316ef..095788fa368 100644
+--- a/crates/payment_methods/src/controller.rs
++++ b/crates/payment_methods/src/controller.rs
+@@ -229,6 +229,12 @@ pub trait PaymentMethodsController {
+         merchant_id: &id_type::MerchantId,
+         card_network: Option<common_enums::CardNetwork>,
+     ) -> errors::PmResult<()>;
++
++    #[cfg(feature = "v1")]
++    async fn get_card_details_from_locker(
++        &self,
++        pm: &payment_methods::PaymentMethod,
++    ) -> errors::PmResult<api::CardDetailFromLocker>;
+ }
+ 
+ pub async fn create_encrypted_data<T>(
+diff --git a/crates/router/src/core/payment_methods/cards.rs b/crates/router/src/core/payment_methods/cards.rs
+index 8f29e05e154..db11c6a41c6 100644
+--- a/crates/router/src/core/payment_methods/cards.rs
++++ b/crates/router/src/core/payment_methods/cards.rs
+@@ -890,6 +890,14 @@ impl PaymentMethodsController for PmCards<'_> {
+         .await
+     }
+ 
++    #[cfg(feature = "v1")]
++    async fn get_card_details_from_locker(
++        &self,
++        pm: &domain::PaymentMethod,
++    ) -> errors::RouterResult<api::CardDetailFromLocker> {
++        get_card_details_from_locker(self.state, pm).await
++    }
++
+     #[cfg(feature = "v1")]
+     #[instrument(skip_all)]
+     async fn retrieve_payment_method(
+@@ -4205,6 +4213,7 @@ pub async fn list_customer_payment_method(
+             &pm,
+             Some(parent_payment_method_token.clone()),
+             true,
++            false,
+             &merchant_context,
+         )
+         .await?;
+@@ -4349,6 +4358,7 @@ pub async fn list_customer_payment_method(
+ }
+ 
+ #[cfg(feature = "v1")]
++#[warn(clippy::too_many_arguments)]
+ pub async fn get_pm_list_context(
+     state: &routes::SessionState,
+     payment_method: &enums::PaymentMethod,
+@@ -4358,6 +4368,7 @@ pub async fn get_pm_list_context(
+     #[cfg(feature = "payouts")] parent_payment_method_token: Option<String>,
+     #[cfg(not(feature = "payouts"))] _parent_payment_method_token: Option<String>,
+     is_payment_associated: bool,
++    force_fetch_card_from_vault: bool,
+     merchant_context: &domain::MerchantContext,
+ ) -> Result<Option<PaymentMethodListContext>, error_stack::Report<errors::ApiErrorResponse>> {
+     let cards = PmCards {
+@@ -4366,7 +4377,11 @@ pub async fn get_pm_list_context(
+     };
+     let payment_method_retrieval_context = match payment_method {
+         enums::PaymentMethod::Card => {
+-            let card_details = cards.get_card_details_with_locker_fallback(pm).await?;
++            let card_details = if force_fetch_card_from_vault {
++                Some(cards.get_card_details_from_locker(pm).await?)
++            } else {
++                cards.get_card_details_with_locker_fallback(pm).await?
++            };
+ 
+             card_details.as_ref().map(|card| PaymentMethodListContext {
+                 card_details: Some(card.clone()),
+diff --git a/crates/router/src/core/payouts/validator.rs b/crates/router/src/core/payouts/validator.rs
+index 3d58d1f367e..198caa4b893 100644
+--- a/crates/router/src/core/payouts/validator.rs
++++ b/crates/router/src/core/payouts/validator.rs
+@@ -233,6 +233,7 @@ pub async fn validate_create_request(
+                 payment_method,
+                 None,
+                 false,
++                true,
+                 merchant_context,
+             )
+             .await?
+@@ -243,7 +244,7 @@ pub async fn validate_create_request(
+                             card_number: card.card_number.get_required_value("card_number")?,
+                             card_holder_name: card.card_holder_name,
+                             expiry_month: card.expiry_month.get_required_value("expiry_month")?,
+-                            expiry_year: card.expiry_year.get_required_value("expiry_month")?,
++                            expiry_year: card.expiry_year.get_required_value("expiry_year")?,
+                         },
+                     ))),
+                     (_, Some(bank)) => Ok(Some(payouts::PayoutMethodData::Bank(bank))),
+
+From 920a98b3ae378fe396dfe08afbcbe4939fe632a3 Mon Sep 17 00:00:00 2001
+From: Kashif <kashif.dev@protonmail.com>
+Date: Wed, 23 Jul 2025 15:45:19 +0530
+Subject: [PATCH 2/2] chore: fix clippy
+
+---
+ crates/router/src/core/payment_methods/cards.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/router/src/core/payment_methods/cards.rs b/crates/router/src/core/payment_methods/cards.rs
+index db11c6a41c6..7ba707316c5 100644
+--- a/crates/router/src/core/payment_methods/cards.rs
++++ b/crates/router/src/core/payment_methods/cards.rs
+@@ -4358,7 +4358,7 @@ pub async fn list_customer_payment_method(
+ }
+ 
+ #[cfg(feature = "v1")]
+-#[warn(clippy::too_many_arguments)]
++#[allow(clippy::too_many_arguments)]
+ pub async fn get_pm_list_context(
+     state: &routes::SessionState,
+     payment_method: &enums::PaymentMethod,

@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "rustfmt": {
+      "returncode": 101,
+      "elapsed_seconds": 0.01,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "error: no such command: `+nightly`\n\nhelp: invoke `cargo` through `rustup` to handle `+toolchain` directives\n"
+    },
+    "cargo_check_affected": {
+      "returncode": 101,
+      "elapsed_seconds": 30.41,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "    Updating git repository `https://github.com/juspay/connector-service`\nwarning: spurious network error (3 tries remaining): could not read from remote repository; class=Net (12); code=Eof (-20)\nwarning: spurious network error (2 tries remaining): could not read from remote repository; class=Net (12); code=Eof (-20)\nwarning: spurious network error (1 try remaining): could not read from remote repository; class=Net (12); code=Eof (-20)\nerror: failed to get `rust-grpc-client` as a dependency of package `external_services v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0008_pr_8729/crates/external_services)`\n\nCaused by:\n  failed to load source for dependency `rust-grpc-client`\n\nCaused by:\n  unable to update https://github.com/juspay/connector-service?rev=4918efedd5ea6c33e4a1600b988b2cf4948bed10#4918efed\n\nCaused by:\n  failed to fetch into: /Users/pranav.karthik/.cargo/git/db/connector-service-eea45f477e53ea08\n\nCaused by:\n  revision 4918efedd5ea6c33e4a1600b988b2cf4948bed10 not found\n\nCaused by:\n  network failure seems to have happened\n  if a proxy or similar is necessary `net.git-fetch-with-cli` may help here\n  https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli\n\nCaused by:\n  could not read from remote repository; class=Net (12); code=Eof (-20)\n"
+    }
+  },
+  "summary": {
+    "passed": 0,
+    "total": 2
+  }
+}

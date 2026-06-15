@@ -1,0 +1,37 @@
+{
+  "file_scores": {
+    "precision": 0.25,
+    "recall": 1.0,
+    "f1": 0.4,
+    "agent": 4,
+    "expected": 1,
+    "overlap": 1
+  },
+  "added_line_scores": {
+    "precision": 0.111,
+    "recall": 1.0,
+    "f1": 0.2,
+    "agent": 18,
+    "expected": 2,
+    "overlap": 2
+  },
+  "removed_line_scores": {
+    "precision": 1.0,
+    "recall": 0.5,
+    "f1": 0.667,
+    "agent": 1,
+    "expected": 2,
+    "overlap": 1
+  },
+  "files": {
+    "agent_only": [
+      ".omo/run-continuation/ses_139c9d252ffe6Q7gmlPj6xqaae.json",
+      ".omo/run-continuation/ses_139c9e128ffePxx7ubvE6m7w7g.json",
+      ".omo/run-continuation/ses_139ca24faffespzzSbAtCSgKuh.json"
+    ],
+    "expected_only": [],
+    "overlap": [
+      "crates/hyperswitch_connectors/src/connectors/stripe.rs"
+    ]
+  }
+}

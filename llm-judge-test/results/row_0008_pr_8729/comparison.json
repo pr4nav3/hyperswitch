@@ -1,0 +1,39 @@
+{
+  "file_scores": {
+    "precision": 0.5,
+    "recall": 0.667,
+    "f1": 0.571,
+    "agent": 4,
+    "expected": 3,
+    "overlap": 2
+  },
+  "added_line_scores": {
+    "precision": 0.045,
+    "recall": 0.125,
+    "f1": 0.067,
+    "agent": 22,
+    "expected": 8,
+    "overlap": 1
+  },
+  "removed_line_scores": {
+    "precision": 0.333,
+    "recall": 0.5,
+    "f1": 0.4,
+    "agent": 3,
+    "expected": 2,
+    "overlap": 1
+  },
+  "files": {
+    "agent_only": [
+      ".omo/run-continuation/ses_139283850ffeXjDeQxMJ6W8SJf.json",
+      ".omo/run-continuation/ses_1392867aaffe81gasU6b0UeSR8.json"
+    ],
+    "expected_only": [
+      "crates/payment_methods/src/controller.rs"
+    ],
+    "overlap": [
+      "crates/router/src/core/payment_methods/cards.rs",
+      "crates/router/src/core/payouts/validator.rs"
+    ]
+  }
+}

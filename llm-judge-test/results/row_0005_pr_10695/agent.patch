@@ -1,0 +1,143 @@
+diff --git a/.omo/run-continuation/ses_1396abe24ffeJOvq82h33BgPh6.json b/.omo/run-continuation/ses_1396abe24ffeJOvq82h33BgPh6.json
+new file mode 100644
+index 0000000000..00082dc07d
+--- /dev/null
++++ b/.omo/run-continuation/ses_1396abe24ffeJOvq82h33BgPh6.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_1396abe24ffeJOvq82h33BgPh6",
++  "updatedAt": "2026-06-14T14:46:25.485Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T14:46:25.485Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/.omo/run-continuation/ses_1396b18b1ffe5aDBQxaADn1BQ4.json b/.omo/run-continuation/ses_1396b18b1ffe5aDBQxaADn1BQ4.json
+new file mode 100644
+index 0000000000..15bdffe074
+--- /dev/null
++++ b/.omo/run-continuation/ses_1396b18b1ffe5aDBQxaADn1BQ4.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_1396b18b1ffe5aDBQxaADn1BQ4",
++  "updatedAt": "2026-06-14T14:43:10.717Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T14:43:10.717Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/crates/hyperswitch_connectors/src/connectors/gigadat.rs b/crates/hyperswitch_connectors/src/connectors/gigadat.rs
+index bc423e3951..d5e99b67fe 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gigadat.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gigadat.rs
+@@ -60,7 +60,6 @@ use masking::{Mask, PeekInterface};
+ #[cfg(feature = "payouts")]
+ use router_env::{instrument, tracing};
+ use transformers as gigadat;
+-use url::form_urlencoded;
+ use uuid::Uuid;
+ 
+ #[cfg(feature = "payouts")]
+@@ -959,20 +958,10 @@ impl webhooks::IncomingWebhook for Gigadat {
+         let body_str = std::str::from_utf8(request.body)
+             .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+ 
+-        let details: Vec<transformers::GigadatWebhookKeyValue> =
+-            form_urlencoded::parse(body_str.as_bytes())
+-                .map(|(key, value)| transformers::GigadatWebhookKeyValue {
+-                    key: key.to_string(),
+-                    value: value.to_string(),
+-                })
+-                .collect();
++        let details = transformers::GigadatWebhookKeyValueBody::decode_from_url(body_str)?;
++        let webhook_type = details.webhook_type;
+ 
+-        let webhook_type = details
+-            .iter()
+-            .find(|&entry| entry.key == "type")
+-            .ok_or(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+-
+-        let reference_id = match transformers::GigadatFlow::get_flow(webhook_type.value.as_str())? {
++        let reference_id = match transformers::GigadatFlow::get_flow(&webhook_type)? {
+             transformers::GigadatFlow::Payment => {
+                 api_models::webhooks::ObjectReferenceId::PaymentId(
+                     api_models::payments::PaymentIdType::ConnectorTransactionId(
+@@ -996,20 +985,11 @@ impl webhooks::IncomingWebhook for Gigadat {
+         let body_str = std::str::from_utf8(request.body)
+             .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+ 
+-        let details: Vec<transformers::GigadatWebhookKeyValue> =
+-            form_urlencoded::parse(body_str.as_bytes())
+-                .map(|(key, value)| transformers::GigadatWebhookKeyValue {
+-                    key: key.to_string(),
+-                    value: value.to_string(),
+-                })
+-                .collect();
++        let details = transformers::GigadatWebhookKeyValueBody::decode_from_url(body_str)?;
+ 
+-        let webhook_type = details
+-            .iter()
+-            .find(|&entry| entry.key == "type")
+-            .ok_or(errors::ConnectorError::WebhookBodyDecodingFailed)?;
++        let webhook_type = details.webhook_type;
+ 
+-        let flow_type = transformers::GigadatFlow::get_flow(webhook_type.value.as_str())?;
++        let flow_type = transformers::GigadatFlow::get_flow(&webhook_type)?;
+         let event_type =
+             transformers::get_gigadat_webhook_event_type(query_params.status, flow_type);
+         Ok(event_type)
+@@ -1022,16 +1002,8 @@ impl webhooks::IncomingWebhook for Gigadat {
+         let body_str = std::str::from_utf8(request.body)
+             .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+ 
+-        let details: Vec<transformers::GigadatWebhookKeyValue> =
+-            form_urlencoded::parse(body_str.as_bytes())
+-                .map(|(key, value)| transformers::GigadatWebhookKeyValue {
+-                    key: key.to_string(),
+-                    value: value.to_string(),
+-                })
+-                .collect();
+-        let resource_object = serde_json::to_string(&details)
+-            .change_context(errors::ConnectorError::WebhookBodyDecodingFailed)?;
+-        Ok(Box::new(resource_object))
++        let details = transformers::GigadatWebhookKeyValueBody::decode_from_url(body_str)?;
++        Ok(Box::new(details))
+     }
+     async fn verify_webhook_source(
+         &self,
+diff --git a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+index 1526c65087..f011bb8423 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+@@ -623,7 +623,22 @@ pub struct GigadatWebhookQueryParameters {
+ }
+ 
+ #[derive(Debug, Serialize, Deserialize)]
+-pub struct GigadatWebhookKeyValue {
+-    pub key: String,
+-    pub value: String,
++#[serde(rename_all = "camelCase")]
++pub struct GigadatWebhookKeyValueBody {
++    #[serde(rename = "type")]
++    pub webhook_type: String,
++    pub final_type: Option<String>,
++    pub cpi_type: Option<String>,
++    pub name: Option<Secret<String>>,
++    pub mobile: Option<Secret<String>>,
++    pub user_id: Option<Secret<String>>,
++    pub email: Option<Secret<String>>,
++    pub financial_institution: Option<Secret<String>>,
++}
++
++impl GigadatWebhookKeyValueBody {
++    pub fn decode_from_url(body_str: &str) -> Result<Self, errors::ConnectorError> {
++        serde_urlencoded::from_str(body_str)
++            .map_err(|_| errors::ConnectorError::WebhookBodyDecodingFailed)
++    }
+ }

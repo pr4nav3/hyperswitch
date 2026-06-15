@@ -1,0 +1,40 @@
+{
+  "file_scores": {
+    "precision": 0.857,
+    "recall": 1.0,
+    "f1": 0.923,
+    "agent": 7,
+    "expected": 6,
+    "overlap": 6
+  },
+  "added_line_scores": {
+    "precision": 0.438,
+    "recall": 1.0,
+    "f1": 0.609,
+    "agent": 16,
+    "expected": 7,
+    "overlap": 7
+  },
+  "removed_line_scores": {
+    "precision": 0.875,
+    "recall": 1.0,
+    "f1": 0.933,
+    "agent": 8,
+    "expected": 7,
+    "overlap": 7
+  },
+  "files": {
+    "agent_only": [
+      ".omo/run-continuation/ses_1397bc469ffe4YMFTAL9enW68A.json"
+    ],
+    "expected_only": [],
+    "overlap": [
+      "config/config.example.toml",
+      "config/deployments/integration_test.toml",
+      "config/deployments/production.toml",
+      "config/deployments/sandbox.toml",
+      "config/development.toml",
+      "config/docker_compose.toml"
+    ]
+  }
+}

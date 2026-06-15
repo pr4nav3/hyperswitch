@@ -1,0 +1,36 @@
+{
+  "file_scores": {
+    "precision": 0.667,
+    "recall": 1.0,
+    "f1": 0.8,
+    "agent": 3,
+    "expected": 2,
+    "overlap": 2
+  },
+  "added_line_scores": {
+    "precision": 0.154,
+    "recall": 0.08,
+    "f1": 0.105,
+    "agent": 13,
+    "expected": 25,
+    "overlap": 2
+  },
+  "removed_line_scores": {
+    "precision": 0.5,
+    "recall": 0.2,
+    "f1": 0.286,
+    "agent": 2,
+    "expected": 5,
+    "overlap": 1
+  },
+  "files": {
+    "agent_only": [
+      ".omo/run-continuation/ses_139169b96ffe1K31x67UM3I8Vu.json"
+    ],
+    "expected_only": [],
+    "overlap": [
+      "crates/router/src/core/admin.rs",
+      "crates/router/src/core/routing/helpers.rs"
+    ]
+  }
+}

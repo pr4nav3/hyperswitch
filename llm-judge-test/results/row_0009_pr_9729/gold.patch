@@ -1,0 +1,222 @@
+From 5e2f9380dd45a524a5ae63ab76e136fa3a95c439 Mon Sep 17 00:00:00 2001
+From: Prajjwal kumar <write2prajjwal@gmail.com>
+Date: Wed, 8 Oct 2025 00:46:31 +0530
+Subject: [PATCH 1/5] fix(routing): cache redaction on updation of mca
+
+---
+ crates/router/src/core/admin.rs           | 33 ++++++++++++++--
+ crates/router/src/core/routing/helpers.rs | 47 -----------------------
+ 2 files changed, 29 insertions(+), 51 deletions(-)
+
+diff --git a/crates/router/src/core/admin.rs b/crates/router/src/core/admin.rs
+index 30f70943487..9652bfdd529 100644
+--- a/crates/router/src/core/admin.rs
++++ b/crates/router/src/core/admin.rs
+@@ -23,7 +23,7 @@ use masking::{ExposeInterface, PeekInterface, Secret};
+ use pm_auth::types as pm_auth_types;
+ use uuid::Uuid;
+ 
+-use super::routing::helpers::{redact_cgraph_cache, update_default_fallback_on_mca_update};
++use super::routing::helpers::redact_cgraph_cache;
+ #[cfg(any(feature = "v1", feature = "v2"))]
+ use crate::types::transformers::ForeignFrom;
+ use crate::{
+@@ -2873,7 +2873,7 @@ pub async fn update_connector(
+     let updated_mca = db
+         .update_merchant_connector_account(
+             key_manager_state,
+-            mca,
++            mca.clone(),
+             payment_connector.into(),
+             &key_store,
+         )
+@@ -2894,8 +2894,33 @@ pub async fn update_connector(
+     // redact cgraph cache on connector updation
+     redact_cgraph_cache(&state, merchant_id, &profile_id).await?;
+ 
+-    // update default fallback config
+-    update_default_fallback_on_mca_update(&state, merchant_id, &profile_id, &updated_mca).await?;
++    // redact routing cache on connector updation
++    #[cfg(feature = "v1")]
++    let merchant_config = MerchantDefaultConfigUpdate {
++        routable_connector: &Some(
++            common_enums::RoutableConnectors::from_str(&mca.connector_name).map_err(|_| {
++                errors::ApiErrorResponse::InvalidDataValue {
++                    field_name: "connector_name",
++                }
++            })?,
++        ),
++        merchant_connector_id: &mca.get_id(),
++        store: db,
++        merchant_id,
++        profile_id: &mca.profile_id,
++        transaction_type: &mca.connector_type.into(),
++    };
++
++    #[cfg(feature = "v1")]
++    if req.disabled.unwrap_or(false) {
++        merchant_config
++            .retrieve_and_delete_from_default_fallback_routing_algorithm_if_routable_connector_exists()
++            .await?;
++    } else {
++        merchant_config
++            .retrieve_and_update_default_fallback_routing_algorithm_if_routable_connector_exists()
++            .await?;
++    }
+ 
+     let response = updated_mca.foreign_try_into()?;
+ 
+diff --git a/crates/router/src/core/routing/helpers.rs b/crates/router/src/core/routing/helpers.rs
+index 03e24ca2bf1..385d010b966 100644
+--- a/crates/router/src/core/routing/helpers.rs
++++ b/crates/router/src/core/routing/helpers.rs
+@@ -2788,50 +2788,3 @@ pub async fn redact_routing_cache(
+ 
+     Ok(())
+ }
+-
+-pub async fn update_default_fallback_on_mca_update(
+-    state: &SessionState,
+-    merchant_id: &id_type::MerchantId,
+-    profile_id: &id_type::ProfileId,
+-    updated_mca: &hyperswitch_domain_models::merchant_connector_account::MerchantConnectorAccount,
+-) -> RouterResult<()> {
+-    let db = state.store.as_ref();
+-    let merchant_id_str = merchant_id.get_string_repr();
+-    let profile_id_str = profile_id.get_string_repr();
+-    let txn_type = &storage::enums::TransactionType::from(updated_mca.connector_type);
+-
+-    let mut connectors = get_merchant_default_config(db, merchant_id_str, txn_type).await?;
+-
+-    let choice = routing_types::RoutableConnectorChoice {
+-        choice_kind: routing_types::RoutableChoiceKind::FullStruct,
+-        connector: api_models::enums::RoutableConnectors::from_str(
+-            &updated_mca.connector_name.to_string(),
+-        )
+-        .change_context(errors::ApiErrorResponse::IncorrectConnectorNameGiven)
+-        .attach_printable(format!(
+-            "Unable to parse RoutableConnectors from connector: {}",
+-            updated_mca.connector_name
+-        ))?,
+-        merchant_connector_id: Some(updated_mca.get_id().clone()),
+-    };
+-
+-    if updated_mca.disabled.unwrap_or(false)
+-        || updated_mca.status == api_models::enums::ConnectorStatus::Inactive
+-    {
+-        // remove if disabled
+-        connectors.retain(|c| c.merchant_connector_id != Some(updated_mca.get_id().clone()));
+-    } else {
+-        // ensure it is present if enabled
+-        if !connectors.contains(&choice) {
+-            connectors.push(choice);
+-        }
+-    }
+-
+-    // update merchant config
+-    update_merchant_default_config(db, merchant_id_str, connectors.clone(), txn_type).await?;
+-
+-    // update profile config
+-    update_merchant_default_config(db, profile_id_str, connectors, txn_type).await?;
+-
+-    Ok(())
+-}
+
+From 248e1fd12c3fd07f26fc2453cfd87aa717e06cb1 Mon Sep 17 00:00:00 2001
+From: Prajjwal kumar <write2prajjwal@gmail.com>
+Date: Wed, 8 Oct 2025 01:23:28 +0530
+Subject: [PATCH 2/5] fix: lints
+
+---
+ crates/router/src/core/routing/helpers.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/router/src/core/routing/helpers.rs b/crates/router/src/core/routing/helpers.rs
+index 385d010b966..261312e9f63 100644
+--- a/crates/router/src/core/routing/helpers.rs
++++ b/crates/router/src/core/routing/helpers.rs
+@@ -4,7 +4,7 @@
+ //! routing dict, configs, defaults
+ #[cfg(all(feature = "dynamic_routing", feature = "v1"))]
+ use std::sync::Arc;
+-use std::{fmt::Debug, str::FromStr};
++use std::fmt::Debug;
+ 
+ #[cfg(feature = "v1")]
+ use api_models::open_router;
+
+From e974e44d1ed2fdace7e59127d7f283259b3d29ed Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Tue, 7 Oct 2025 19:54:25 +0000
+Subject: [PATCH 3/5] chore: run formatter
+
+---
+ crates/router/src/core/routing/helpers.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/router/src/core/routing/helpers.rs b/crates/router/src/core/routing/helpers.rs
+index 261312e9f63..9284f52e2ad 100644
+--- a/crates/router/src/core/routing/helpers.rs
++++ b/crates/router/src/core/routing/helpers.rs
+@@ -2,9 +2,9 @@
+ //!
+ //! Functions that are used to perform the retrieval of merchant's
+ //! routing dict, configs, defaults
++use std::fmt::Debug;
+ #[cfg(all(feature = "dynamic_routing", feature = "v1"))]
+ use std::sync::Arc;
+-use std::fmt::Debug;
+ 
+ #[cfg(feature = "v1")]
+ use api_models::open_router;
+
+From cd4df88b047978e60b21536feb7f5afbf0e8b35b Mon Sep 17 00:00:00 2001
+From: Prajjwal kumar <write2prajjwal@gmail.com>
+Date: Wed, 8 Oct 2025 10:56:40 +0530
+Subject: [PATCH 4/5] fix: lints
+
+---
+ crates/router/src/core/routing/helpers.rs | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/crates/router/src/core/routing/helpers.rs b/crates/router/src/core/routing/helpers.rs
+index 261312e9f63..987db9b14ce 100644
+--- a/crates/router/src/core/routing/helpers.rs
++++ b/crates/router/src/core/routing/helpers.rs
+@@ -2,9 +2,11 @@
+ //!
+ //! Functions that are used to perform the retrieval of merchant's
+ //! routing dict, configs, defaults
++use std::fmt::Debug;
++#[cfg(feature = "v1")]
++use std::str::FromStr;
+ #[cfg(all(feature = "dynamic_routing", feature = "v1"))]
+ use std::sync::Arc;
+-use std::fmt::Debug;
+ 
+ #[cfg(feature = "v1")]
+ use api_models::open_router;
+
+From 72853731a0d5acee8fc2bc51e4d368a6bd66ad17 Mon Sep 17 00:00:00 2001
+From: Prajjwal kumar <write2prajjwal@gmail.com>
+Date: Wed, 8 Oct 2025 11:28:43 +0530
+Subject: [PATCH 5/5] fix: lints
+
+---
+ crates/router/src/core/routing/helpers.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/router/src/core/routing/helpers.rs b/crates/router/src/core/routing/helpers.rs
+index 987db9b14ce..e5671e2edb3 100644
+--- a/crates/router/src/core/routing/helpers.rs
++++ b/crates/router/src/core/routing/helpers.rs
+@@ -3,7 +3,7 @@
+ //! Functions that are used to perform the retrieval of merchant's
+ //! routing dict, configs, defaults
+ use std::fmt::Debug;
+-#[cfg(feature = "v1")]
++#[cfg(all(feature = "dynamic_routing", feature = "v1"))]
+ use std::str::FromStr;
+ #[cfg(all(feature = "dynamic_routing", feature = "v1"))]
+ use std::sync::Arc;

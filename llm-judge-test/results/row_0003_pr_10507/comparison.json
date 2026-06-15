@@ -1,0 +1,42 @@
+{
+  "file_scores": {
+    "precision": 0.833,
+    "recall": 0.714,
+    "f1": 0.769,
+    "agent": 6,
+    "expected": 7,
+    "overlap": 5
+  },
+  "added_line_scores": {
+    "precision": 0.25,
+    "recall": 0.6,
+    "f1": 0.353,
+    "agent": 12,
+    "expected": 5,
+    "overlap": 3
+  },
+  "removed_line_scores": {
+    "precision": 0.5,
+    "recall": 0.5,
+    "f1": 0.5,
+    "agent": 4,
+    "expected": 4,
+    "overlap": 2
+  },
+  "files": {
+    "agent_only": [
+      ".omo/run-continuation/ses_13993539fffeCK2AU6uZkpatP8.json"
+    ],
+    "expected_only": [
+      "api-reference/v1/openapi_spec_v1.json",
+      "api-reference/v2/openapi_spec_v2.json"
+    ],
+    "overlap": [
+      "crates/api_models/src/payments.rs",
+      "crates/connector_configs/toml/development.toml",
+      "crates/connector_configs/toml/production.toml",
+      "crates/connector_configs/toml/sandbox.toml",
+      "crates/hyperswitch_domain_models/src/payments.rs"
+    ]
+  }
+}

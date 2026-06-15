@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "rustfmt": {
+      "returncode": 101,
+      "elapsed_seconds": 0.01,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "error: no such command: `+nightly`\n\nhelp: invoke `cargo` through `rustup` to handle `+toolchain` directives\n"
+    },
+    "cargo_check_affected": {
+      "returncode": 0,
+      "elapsed_seconds": 0.85,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "warning: unused import: `dssa::graph::euclid_graph_prelude`\n --> crates/euclid/src/dssa/truth.rs:5:13\n  |\n5 | use crate::{dssa::graph::euclid_graph_prelude, frontend::dir};\n  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `euclid` (lib) generated 1 warning (run `cargo fix --lib -p euclid` to apply 1 suggestion)\nwarning: unused import: `schema`\n  --> crates/api_models/src/payment_methods.rs:17:14\n   |\n17 | use utoipa::{schema, ToSchema};\n   |              ^^^^^^\n   |\n   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `api_models` (lib) generated 1 warning (run `cargo fix --lib -p api_models` to apply 1 suggestion)\nwarning: unused variable: `data`\n  --> crates/hyperswitch_domain_models/src/errors/api_error_response.rs:40:35\n   |\n40 |     PaymentAuthenticationFailed { data: Option<serde_json::Value> },\n   |                                   ^^^^ help: try ignoring the field: `data: _`\n   |\n   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unused variable: `reason`\n   --> crates/hyperswitch_domain_models/src/errors/api_error_response.rs:136:31\n    |\n136 |     MandateValidationFailed { reason: String },\n    |                               ^^^^^^ help: try ignoring the field: `reason: _`\n\nwarning: unused variable: `field_names`\n   --> crates/hyperswitch_domain_models/src/errors/api_error_response.rs:237:29\n    |\n237 |     MissingRequiredFields { field_names: Vec<&'static str> },\n    |                             ^^^^^^^^^^^ help: try ignoring the field: `field_names: _`\n\nwarning: unused variable: `data`\n  --> crates/hyperswitch_domain_models/src/errors/api_error_response.rs:44:23\n   |\n44 |     InvalidCardData { data: Option<serde_json::Value> },\n   |                       ^^^^ help: try ignoring the field: `data: _`\n\nwarning: unused variable: `connector_transaction_id`\n   --> crates/hyperswitch_domain_m"
+    }
+  },
+  "summary": {
+    "passed": 1,
+    "total": 2
+  }
+}

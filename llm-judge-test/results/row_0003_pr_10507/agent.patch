@@ -1,0 +1,84 @@
+diff --git a/.omo/run-continuation/ses_13993539fffeCK2AU6uZkpatP8.json b/.omo/run-continuation/ses_13993539fffeCK2AU6uZkpatP8.json
+new file mode 100644
+index 0000000000..d06fdea3b9
+--- /dev/null
++++ b/.omo/run-continuation/ses_13993539fffeCK2AU6uZkpatP8.json
+@@ -0,0 +1,10 @@
++{
++  "sessionID": "ses_13993539fffeCK2AU6uZkpatP8",
++  "updatedAt": "2026-06-14T13:59:58.678Z",
++  "sources": {
++    "background-task": {
++      "state": "idle",
++      "updatedAt": "2026-06-14T13:59:58.678Z"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/crates/api_models/src/payments.rs b/crates/api_models/src/payments.rs
+index 3ae0226365..ef63219d90 100644
+--- a/crates/api_models/src/payments.rs
++++ b/crates/api_models/src/payments.rs
+@@ -11440,8 +11440,8 @@ pub struct ClickToPaySessionResponse {
+     pub acquirer_bin: String,
+     #[smithy(value_type = "String")]
+     pub acquirer_merchant_id: String,
+-    #[smithy(value_type = "String")]
+-    pub merchant_category_code: String,
++    #[smithy(value_type = "Option<String>")]
++    pub merchant_category_code: Option<String>,
+     #[smithy(value_type = "String")]
+     pub merchant_country_code: String,
+     #[schema(value_type = String, example = "38.02")]
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index a62ede1308..53df9508ef 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -6506,7 +6506,7 @@ type="Text"
+ name="merchant_category_code"
+ label="Merchant Category Code"
+ placeholder="Enter Merchant Category Code"
+-required=true
++required=false
+ type="Text"
+ 
+ [ctp_visa.metadata.merchant_country_code]
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index afe60d027c..618350b249 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -5101,7 +5101,7 @@ type = "Text"
+ name = "merchant_category_code"
+ label = "Merchant Category Code"
+ placeholder = "Enter Merchant Category Code"
+-required = true
++required = false
+ type = "Text"
+ 
+ [ctp_visa.metadata.merchant_country_code]
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index 35b2d28a34..4abebd7d2b 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -6482,7 +6482,7 @@ type = "Text"
+ name = "merchant_category_code"
+ label = "Merchant Category Code"
+ placeholder = "Enter Merchant Category Code"
+-required = true
++required = false
+ type = "Text"
+ 
+ [ctp_visa.metadata.merchant_country_code]
+diff --git a/crates/hyperswitch_domain_models/src/payments.rs b/crates/hyperswitch_domain_models/src/payments.rs
+index f22c5fd373..e6dfc00c59 100644
+--- a/crates/hyperswitch_domain_models/src/payments.rs
++++ b/crates/hyperswitch_domain_models/src/payments.rs
+@@ -974,7 +974,7 @@ pub struct ClickToPayMetaData {
+     pub locale: String,
+     pub acquirer_bin: String,
+     pub acquirer_merchant_id: String,
+-    pub merchant_category_code: String,
++    pub merchant_category_code: Option<String>,
+     pub merchant_country_code: String,
+     pub dpa_client_id: Option<String>,
+ }

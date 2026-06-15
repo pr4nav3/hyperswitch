@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "rustfmt": {
+      "returncode": 101,
+      "elapsed_seconds": 0.22,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "error: no such command: `+nightly`\n\nhelp: invoke `cargo` through `rustup` to handle `+toolchain` directives\n"
+    },
+    "cargo_check_affected": {
+      "returncode": 0,
+      "elapsed_seconds": 142.76,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "    Checking common_enums v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/common_enums)\n   Compiling payment_link v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/payment_link)\n   Compiling wasm-bindgen-shared v0.2.100\n   Compiling bumpalo v3.17.0\n   Compiling wasm-bindgen v0.2.100\n   Compiling drainer v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/drainer)\n   Compiling smithy-generator v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/smithy-generator)\n   Compiling wasm-bindgen-backend v0.2.100\n   Compiling wasm-bindgen-macro-support v0.2.100\n   Compiling wasm-bindgen-macro v0.2.100\n    Checking common_utils v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/common_utils)\n    Checking currency_conversion v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/currency_conversion)\n    Checking js-sys v0.3.77\n    Checking serde-wasm-bindgen v0.5.0\n    Checking serde-wasm-bindgen v0.6.5\n    Checking ron-parser v0.1.4\n    Checking euclid v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/euclid)\n    Checking cards v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/cards)\n    Checking redis_interface v0.1.0 (/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0003_pr_10507/crates/redis_interface)\nwarning: unused import: `dssa::graph::euclid_graph_prelude`\n --> crates/euclid/src/dssa/truth.rs:5:13\n  |\n5 | use crate::{dssa::graph::euclid_graph_prelude, frontend::dir};\n  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `euclid` (lib) generated 1 warning (run `cargo fix --lib -p euclid` to appl"
+    }
+  },
+  "summary": {
+    "passed": 1,
+    "total": 2
+  }
+}

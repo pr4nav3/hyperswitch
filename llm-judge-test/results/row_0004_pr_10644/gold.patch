@@ -1,0 +1,107 @@
+From 9e73cf91f5d86775c90970034380de881fd633c0 Mon Sep 17 00:00:00 2001
+From: AkshayaFoiger <akshaya.shankar@juspay.in>
+Date: Fri, 12 Dec 2025 13:45:12 +0530
+Subject: [PATCH] add stripe back to toml
+
+---
+ config/config.example.toml               | 2 +-
+ config/deployments/integration_test.toml | 4 ++--
+ config/deployments/production.toml       | 4 ++--
+ config/deployments/sandbox.toml          | 4 ++--
+ config/development.toml                  | 4 ++--
+ config/docker_compose.toml               | 4 ++--
+ 6 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/config/config.example.toml b/config/config.example.toml
+index 56c948699a7..ddb4a74e250 100644
+--- a/config/config.example.toml
++++ b/config/config.example.toml
+@@ -555,7 +555,7 @@ bank_redirect.ideal = { connector_list = "stripe,adyen,globalpay" }
+ bank_redirect.sofort = { connector_list = "stripe,globalpay" }
+ wallet.apple_pay = { connector_list = "stripe,adyen,cybersource,noon,bankofamerica,authorizedotnet" }
+ wallet.samsung_pay = { connector_list = "cybersource" }
+-wallet.google_pay = { connector_list = "bankofamerica,authorizedotnet,cybersource" }
++wallet.google_pay = { connector_list = "stripe,bankofamerica,authorizedotnet,cybersource" }
+ bank_redirect.giropay = { connector_list = "globalpay" }
+ 
+ [mandates.supported_payment_methods]
+diff --git a/config/deployments/integration_test.toml b/config/deployments/integration_test.toml
+index fc00bb9adf6..3bbe15b60cb 100644
+--- a/config/deployments/integration_test.toml
++++ b/config/deployments/integration_test.toml
+@@ -221,9 +221,9 @@ bank_debit.sepa = { connector_list = "gocardless,adyen" }
+ card.credit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ card.debit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ pay_later.klarna.connector_list = "adyen"
+-wallet.apple_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,nmi,tesouro"
++wallet.apple_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,nmi,tesouro"
+ wallet.samsung_pay.connector_list = "cybersource"
+-wallet.google_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,tesouro"
++wallet.google_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,tesouro"
+ wallet.paypal.connector_list = "adyen,novalnet"
+ wallet.momo.connector_list = "adyen"
+ wallet.kakao_pay.connector_list = "adyen"
+diff --git a/config/deployments/production.toml b/config/deployments/production.toml
+index 5d0e1bf5846..b634672456e 100644
+--- a/config/deployments/production.toml
++++ b/config/deployments/production.toml
+@@ -221,9 +221,9 @@ bank_debit.sepa = { connector_list = "gocardless,adyen" }
+ card.credit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ card.debit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ pay_later.klarna.connector_list = "adyen"
+-wallet.apple_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,nmi,tesouro"
++wallet.apple_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,nmi,tesouro"
+ wallet.samsung_pay.connector_list = "cybersource"
+-wallet.google_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,tesouro"
++wallet.google_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,tesouro"
+ wallet.paypal.connector_list = "adyen,novalnet"
+ wallet.momo.connector_list = "adyen"
+ wallet.kakao_pay.connector_list = "adyen"
+diff --git a/config/deployments/sandbox.toml b/config/deployments/sandbox.toml
+index 030f85de020..47bdaa96924 100644
+--- a/config/deployments/sandbox.toml
++++ b/config/deployments/sandbox.toml
+@@ -228,9 +228,9 @@ bank_debit.sepa = { connector_list = "gocardless,adyen" }
+ card.credit.connector_list = "checkout,stripe,adyen,zift,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ card.debit.connector_list = "checkout,stripe,adyen,zift,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ pay_later.klarna.connector_list = "adyen"
+-wallet.apple_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,nmi,tesouro"
++wallet.apple_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,nmi,tesouro"
+ wallet.samsung_pay.connector_list = "cybersource"
+-wallet.google_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,tesouro"
++wallet.google_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,nuvei,authorizedotnet,tesouro"
+ wallet.paypal.connector_list = "adyen,novalnet"
+ wallet.momo.connector_list = "adyen"
+ wallet.kakao_pay.connector_list = "adyen"
+diff --git a/config/development.toml b/config/development.toml
+index 73783101294..9ab4b75766c 100644
+--- a/config/development.toml
++++ b/config/development.toml
+@@ -1103,9 +1103,9 @@ bank_debit.sepa = { connector_list = "gocardless,adyen" }
+ card.credit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ card.debit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,tesouro,mollie"
+ pay_later.klarna.connector_list = "adyen"
+-wallet.apple_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,authorizedotnet,tesouro"
++wallet.apple_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,authorizedotnet,tesouro"
+ wallet.samsung_pay.connector_list = "cybersource"
+-wallet.google_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,authorizedotnet,tesouro"
++wallet.google_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,authorizedotnet,tesouro"
+ wallet.paypal.connector_list = "adyen,novalnet"
+ wallet.momo.connector_list = "adyen"
+ wallet.kakao_pay.connector_list = "adyen"
+diff --git a/config/docker_compose.toml b/config/docker_compose.toml
+index 5ec893d78ba..9203ab3bab4 100644
+--- a/config/docker_compose.toml
++++ b/config/docker_compose.toml
+@@ -1018,9 +1018,9 @@ bank_debit.sepa = { connector_list = "gocardless,adyen" }
+ card.credit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,mollie"
+ card.debit.connector_list = "checkout,stripe,adyen,authorizedotnet,cybersource,datatrans,worldpay,nmi,bankofamerica,wellsfargo,bamboraapac,nexixpay,novalnet,paypal,archipel,mollie"
+ pay_later.klarna.connector_list = "adyen"
+-wallet.apple_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,authorizedotnet"
++wallet.apple_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,authorizedotnet"
+ wallet.samsung_pay.connector_list = "cybersource"
+-wallet.google_pay.connector_list = "adyen,cybersource,bankofamerica,novalnet,authorizedotnet"
++wallet.google_pay.connector_list = "stripe,adyen,cybersource,bankofamerica,novalnet,authorizedotnet"
+ wallet.paypal.connector_list = "adyen,novalnet"
+ wallet.momo.connector_list = "adyen"
+ wallet.kakao_pay.connector_list = "adyen"

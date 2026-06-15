@@ -1,0 +1,36 @@
+{
+  "file_scores": {
+    "precision": 0.667,
+    "recall": 1.0,
+    "f1": 0.8,
+    "agent": 3,
+    "expected": 2,
+    "overlap": 2
+  },
+  "added_line_scores": {
+    "precision": 0.167,
+    "recall": 0.25,
+    "f1": 0.2,
+    "agent": 12,
+    "expected": 8,
+    "overlap": 2
+  },
+  "removed_line_scores": {
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "agent": 1,
+    "expected": 1,
+    "overlap": 1
+  },
+  "files": {
+    "agent_only": [
+      ".omo/run-continuation/ses_139b2df97ffeAt0PS4U03wx3eS.json"
+    ],
+    "expected_only": [],
+    "overlap": [
+      "config/deployments/production.toml",
+      "crates/hyperswitch_connectors/src/connectors/nuvei/transformers.rs"
+    ]
+  }
+}

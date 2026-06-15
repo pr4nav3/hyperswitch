@@ -1,0 +1,6 @@
+[
+  ".omo/run-continuation/ses_1393860d3ffeFYNAkvXqC5fXdV.json",
+  "crates/hyperswitch_connectors/src/connectors/truelayer.rs",
+  "crates/hyperswitch_connectors/src/connectors/trustly.rs",
+  "crates/payment_methods/src/configs/payment_connector_required_fields.rs"
+]

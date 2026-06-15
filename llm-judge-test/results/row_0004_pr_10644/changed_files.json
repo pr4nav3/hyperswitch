@@ -1,0 +1,9 @@
+[
+  ".omo/run-continuation/ses_1397bc469ffe4YMFTAL9enW68A.json",
+  "config/config.example.toml",
+  "config/deployments/integration_test.toml",
+  "config/deployments/production.toml",
+  "config/deployments/sandbox.toml",
+  "config/development.toml",
+  "config/docker_compose.toml"
+]

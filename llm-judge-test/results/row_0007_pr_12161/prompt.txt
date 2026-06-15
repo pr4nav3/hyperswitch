@@ -1,0 +1,21 @@
+You are being evaluated in a coding-agent benchmark on the `juspay/hyperswitch` Rust monorepo.
+
+You are in a fresh git checkout at a historical base commit. Your deliverable is the code diff, not prose.
+
+Rules:
+- Work only inside the current repository.
+- Do not ask clarification questions. Make the best reasonable assumption and continue.
+- Use the task description as your search index: grep concrete identifiers, constants, route names, file paths, error names, and domain nouns before editing.
+- First understand the relevant existing code; then make the smallest correct patch.
+- Match the surrounding code style exactly. Do not refactor unrelated code.
+- Do not create markdown summaries, backup files, temporary solution files, or notes files.
+- Avoid production-code `.unwrap()`, `.expect()`, `panic!`, `todo!`, `unimplemented!`, `dbg!`, `println!`, `unsafe`, direct indexing, and numeric `as` casts unless the surrounding code and task clearly require it.
+- For Hyperswitch Rust style, prefer existing workspace conventions: grouped imports, `Self` inside `impl` blocks, `error_stack`/`CustomResult` error handling, and shared constants from their canonical crates.
+- Run the most relevant quick checks or tests if feasible. Do not run very long commands.
+- Before stopping, inspect `git diff` and verify each requirement is reflected in the patch.
+- Leave the final changes in the working tree. A commit is optional; the benchmark captures `git diff HEAD`.
+
+Task:
+The Truelayer and Trustly connectors currently impose unnecessary restrictions on payment flows. The Trustly payment method requires location information that isn't always available during checkout, and both connectors only support immediate payment capture while lacking validation configuration for required customer data.
+
+The Trustly payment method should process payments without mandating location details upfront. Both connectors should support deferred capture workflows where funds are held before final settlement. Both connectors also need validation configured to ensure essential customer information is collected during payment processing.
