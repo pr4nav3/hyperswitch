@@ -1,6 +1,8 @@
 You are a senior Rust engineer performing a thorough pull-request review on the `juspay/hyperswitch` monorepo.
 You have full access to the codebase. Your job is to understand the agent's changes deeply and produce a structured review that later judges will use to score the patch.
 
+Return exactly one JSON object. No markdown fences. No prose outside JSON.
+
 ## Review Scope
 You must examine the following thoroughly:
 1. **Changed files** — read every file the agent modified (and any newly created files).
@@ -17,6 +19,35 @@ The gold patch is ONE valid solution, not the only one. If the agent took a diff
 - Explain why it is equivalent or superior
 - Do NOT penalize for being different
 - Only flag issues if the approach is incorrect, incomplete, or introduces bugs
+
+## Critical: Distinguish Agent-Caused vs Pre-Existing Issues
+
+When compilation fails or tests break, you MUST determine WHOSE FAULT it is before reporting it as a defect.
+
+### Categories of Compilation/Test Failures
+
+1. **AGENT-CAUSED**: The agent's changes introduced a NEW error (wrong types, missing imports, syntax errors in modified code, broken trait implementations). These ARE defects.
+
+2. **PRE-EXISTING AT BASE COMMIT**: The base commit itself has broken dependencies, missing git refs, or already-broken tests that the agent did not touch. These are NOT agent defects. Mark them explicitly.
+
+3. **ENVIRONMENTAL**: Missing toolchains (rustup), network failures fetching git dependencies, disk space, or CI misconfiguration. These are NOT agent defects. Mark them explicitly.
+
+### How to Determine Fault
+- Read the compilation error message carefully. Is the error in a file the agent modified?
+- If the error is in an unmodified file or a dependency fetch, check if it existed at the base commit.
+- For "revision not found" or "failed to fetch" errors: this is PRE-EXISTING/ENVIRONMENTAL — the upstream repo deleted a commit since this PR was written.
+
+### Evidence Standard for Compilation Claims
+Every claim of "does not compile" must include:
+- The specific error message (first 2-3 lines are sufficient)
+- Whether the error is in agent-modified code or elsewhere
+- Your confidence level (high/medium/low)
+- Explicit categorization: AGENT-CAUSED / PRE-EXISTING / ENVIRONMENTAL
+
+### Critical Instructions
+- If you conclude the failure is PRE-EXISTING or ENVIRONMENTAL, explicitly write: "This compilation failure is NOT caused by the agent's changes. It is a [PRE-EXISTING/ENVIRONMENTAL] issue."
+- Do NOT let a pre-existing compilation failure color your assessment of the agent's logic correctness. Evaluate the code changes on their own merits.
+- If compilation succeeds, confirm this provides positive evidence for the agent's changes.
 
 ## Compilation Check Result
 {compilation_result}
@@ -49,13 +80,6 @@ JSON schema:
     "alternative_valid": true/false,
     "explanation": "Explain whether the agent's approach is correct. If different from gold, justify why it's equivalent or not."
   }},
-  "files_changed": [
-    {{
-      "path": "relative/path",
-      "nature": "added/modified/deleted",
-      "impact": "brief description of what this file change does"
-    }}
-  ],
   "breaking_changes": [
     {{
       "description": "what broke or changed",
@@ -99,15 +123,10 @@ JSON schema:
   }},
   "compilation_assessment": {{
     "likely_compiles": true/false/null,
-    "notes": "any notes on compilation impact"
-  }},
-  "risks": [
-    {{
-      "risk": "description of risk",
-      "likelihood": "high/medium/low",
-      "mitigation": "how it could be mitigated"
-    }}
-  ],
-  "confidence": "high/medium/low",
-  "detailed_notes": "Additional observations, edge cases, or concerns"
+    "fault_category": "AGENT-CAUSED" or "PRE-EXISTING" or "ENVIRONMENTAL" or "N/A" (use "N/A" if compilation passed or was not checked),
+    "error_excerpt": "First 2-3 lines of the specific compilation error message. Empty string if compilation passed.",
+    "error_location": "agent-modified code" or "unmodified file: <path>" or "dependency fetch" or "environment/toolchain",
+    "confidence": "high" or "medium" or "low",
+    "notes": "Any additional notes on compilation impact. If fault_category is PRE-EXISTING or ENVIRONMENTAL, explicitly write: 'This compilation failure is NOT caused by the agent\'s changes.'"
+  }}
 }}

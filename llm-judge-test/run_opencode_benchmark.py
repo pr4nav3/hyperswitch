@@ -22,10 +22,13 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -33,7 +36,51 @@ from typing import Any
 from aggregate_judges import aggregate_task_judges as aggregate_judge_scores
 
 
+TEST_FILE_RE = re.compile(r"tests?[/\\]|_test\.rs$|_tests\.rs$", re.IGNORECASE)
 DIFF_FILE_RE = re.compile(r"^diff --git a/(.*?) b/(.*?)$", re.MULTILINE)
+
+_ACTIVE_WORKTREES: list[Path] = []
+_SOURCE_REPO: Path | None = None
+_SHUTDOWN_REQUESTED: threading.Event = threading.Event()
+_WRITE_LOCK: threading.Lock = threading.Lock()
+_PRINT_LOCK: threading.Lock = threading.Lock()
+
+
+def _register_worktree(path: Path) -> None:
+    if path not in _ACTIVE_WORKTREES:
+        _ACTIVE_WORKTREES.append(path)
+
+
+def _unregister_worktree(path: Path) -> None:
+    if path in _ACTIVE_WORKTREES:
+        _ACTIVE_WORKTREES.remove(path)
+
+
+def _cleanup_on_signal(signum: int, frame: Any) -> None:
+    sig_name = signal.Signals(signum).name
+    count = len(_ACTIVE_WORKTREES)
+    with _PRINT_LOCK:
+        print(f"\nReceived {sig_name}, shutting down... Cleaning up {count} active worktree(s).", flush=True)
+    _SHUTDOWN_REQUESTED.set()
+    for wt in list(_ACTIVE_WORKTREES):
+        try:
+            if _SOURCE_REPO is not None and _SOURCE_REPO.exists():
+                run_command(
+                    ["git", "worktree", "remove", "--force", str(wt)],
+                    cwd=_SOURCE_REPO,
+                    check=False,
+                )
+            if wt.exists():
+                shutil.rmtree(wt, ignore_errors=True)
+        except Exception:
+            pass
+
+
+try:
+    signal.signal(signal.SIGINT, _cleanup_on_signal)
+    signal.signal(signal.SIGTERM, _cleanup_on_signal)
+except ValueError:
+    pass  # Signals not available on this platform
 
 STYLE_RULES_ADDED = [
     ("unwrap", "uses .unwrap() in production code", r"\.unwrap\s*\(", "soft"),
@@ -90,6 +137,25 @@ class BenchmarkError(RuntimeError):
     pass
 
 
+def _ensure_cargo_on_path(env: dict[str, str] | None) -> dict[str, str]:
+    merged = dict(os.environ) if env is None else {**os.environ, **env}
+    path = merged.get("PATH", "")
+    if shutil.which("cargo", path=path):
+        return merged
+    candidates: list[str] = []
+    cargo_home = os.environ.get("CARGO_HOME")
+    if cargo_home:
+        candidates.append(str(Path(cargo_home) / "bin"))
+    candidates.append(str(Path.home() / ".cargo" / "bin"))
+    if sys.platform == "darwin":
+        candidates.extend(["/opt/homebrew/bin", "/usr/local/bin"])
+    for candidate in candidates:
+        if shutil.which("cargo", path=candidate):
+            merged["PATH"] = candidate + os.pathsep + path
+            return merged
+    return merged
+
+
 def run_command(
     cmd: list[str],
     *,
@@ -98,25 +164,35 @@ def run_command(
     env: dict[str, str] | None = None,
     check: bool = False,
     input: str | None = None,
+    retries_on_timeout: int = 0,
 ) -> CommandResult:
     started = time.time()
-    proc = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd else None,
-        timeout=timeout,
-        env=env,
-        text=True,
-        input=input,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    elapsed = time.time() - started
-    result = CommandResult(proc.returncode, proc.stdout, proc.stderr, elapsed)
-    if check and proc.returncode != 0:
-        rendered = " ".join(cmd)
-        raise BenchmarkError(f"Command failed ({proc.returncode}): {rendered}\n{proc.stderr[-2000:]}")
-    return result
+    last_exception = None
+    for attempt in range(retries_on_timeout + 1):
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(cwd) if cwd else None,
+                timeout=timeout,
+                env=env,
+                text=True,
+                input=input,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            elapsed = time.time() - started
+            result = CommandResult(proc.returncode, proc.stdout, proc.stderr, elapsed)
+            if check and proc.returncode != 0:
+                rendered = " ".join(cmd)
+                raise BenchmarkError(f"Command failed ({proc.returncode}): {rendered}\n{proc.stderr[-2000:]}")
+            return result
+        except subprocess.TimeoutExpired as exc:
+            last_exception = exc
+            if attempt < retries_on_timeout:
+                print(f"  Timeout on attempt {attempt + 1}/{retries_on_timeout + 1}, retrying...", flush=True)
+                continue
+            raise BenchmarkError(f"Command timed out after {retries_on_timeout + 1} attempts: {' '.join(cmd)}") from exc
 
 
 def load_rows(path: Path) -> list[TaskRow]:
@@ -195,14 +271,25 @@ def setup_worktree(source_repo: Path, worktrees_dir: Path, row: TaskRow, keep_ex
         timeout=600,
     )
     if add.returncode != 0:
-        run_command(["git", "worktree", "prune"], cwd=source_repo)
+        run_command(
+            ["git", "worktree", "remove", "--force", str(worktree)],
+            cwd=source_repo,
+            check=False,
+        )
         add = run_command(
             ["git", "worktree", "add", "--detach", str(worktree), row.base_sha],
             cwd=source_repo,
             timeout=600,
         )
     if add.returncode != 0:
-        raise BenchmarkError(f"git worktree add failed for {row.base_sha}: {add.stderr[-2000:]}")
+        if worktree.exists() and not (worktree / ".git").exists():
+            shutil.rmtree(worktree, ignore_errors=True)
+        stderr = add.stderr[-2000:] if add.stderr else "(no stderr)"
+        raise BenchmarkError(
+            f"FATAL: git worktree add failed twice for {row.base_sha}. "
+            f"The worktree could not be created. Error: {stderr}"
+        )
+    _register_worktree(worktree)
     return worktree
 
 
@@ -230,9 +317,9 @@ def parse_diff_lines(patch: str) -> dict[str, dict[str, list[str]]]:
         if line.startswith("+++") or line.startswith("---"):
             continue
         if line.startswith("+"):
-            files[current]["added"].append(line[1:].strip())
+            files[current]["added"].append(line[1:])
         elif line.startswith("-"):
-            files[current]["removed"].append(line[1:].strip())
+            files[current]["removed"].append(line[1:])
     return files
 
 
@@ -281,21 +368,26 @@ def style_check(agent_diff: str) -> dict[str, Any]:
 
     added_lines: list[str] = []
     changed_files: set[str] = set()
+    current_file: str = ""
     for line in agent_diff.splitlines():
         match = DIFF_FILE_RE.match(line)
         if match:
-            changed_files.add(match.group(2))
+            current_file = match.group(2)
+            changed_files.add(current_file)
             continue
         if line.startswith("+++"):
             continue
         if line.startswith("+"):
-            added_lines.append(line[1:])
+            added_lines.append((current_file, line[1:]))
 
-    added_text = "\n".join(added_lines)
     violations: list[dict[str, Any]] = []
 
     for key, description, pattern, severity in STYLE_RULES_ADDED:
-        count = len(re.findall(pattern, added_text))
+        count = 0
+        for filepath, content in added_lines:
+            if TEST_FILE_RE.search(filepath):
+                continue
+            count += len(re.findall(pattern, content))
         if count:
             violations.append({"rule": key, "description": description, "count": count, "severity": severity})
 
@@ -346,7 +438,7 @@ def run_opencode_agent(
     cmd.append(prompt)
     env = os.environ.copy()
     env.update(extra_env)
-    return run_command(cmd, cwd=worktree, timeout=timeout, env=env), prompt
+    return run_command(cmd, cwd=worktree, timeout=timeout, env=env, retries_on_timeout=1), prompt
 
 
 def extract_text_from_opencode_json(stdout: str) -> str:
@@ -369,14 +461,32 @@ def extract_text_from_opencode_json(stdout: str) -> str:
 def parse_json_object(text: str) -> dict[str, Any] | None:
     if not text:
         return None
-    candidates = [text.strip()]
+
+    candidates: list[str] = [text.strip()]
     if "```" in text:
         stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE | re.DOTALL)
         candidates.append(stripped)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end > start:
-        candidates.append(text[start : end + 1])
+
+    def _balanced_braces(s: str) -> list[str]:
+        blocks: list[str] = []
+        depth = 0
+        start = -1
+        for i, ch in enumerate(s):
+            if ch == '{':
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0 and start != -1:
+                    blocks.append(s[start:i + 1])
+                    start = -1
+        return blocks
+
+    for source in list(candidates):
+        for block in sorted(_balanced_braces(source), key=len, reverse=True):
+            candidates.append(block)
+
     for candidate in candidates:
         try:
             parsed = json.loads(candidate)
@@ -514,16 +624,18 @@ def run_compilation_checks(
         scope_note = f"crates:{','.join(sorted(affected_crates))}"
 
     checks: dict[str, CommandResult] = {}
+    cargo_env = _ensure_cargo_on_path(None)
     checks["rustfmt"] = run_command(
         ["cargo", "+nightly", "fmt", "--", "--check"],
         cwd=worktree,
         timeout=min(timeout_per_check, 120),
+        env=cargo_env,
     )
     checks["cargo_check_affected"] = run_command(
         check_cmd,
         cwd=worktree,
         timeout=timeout_per_check,
-        env=os.environ.copy(),
+        env=cargo_env,
     )
 
     return CompilationResults(checks=checks, scope=scope_note)
@@ -551,7 +663,11 @@ def setup_judge_worktree(
         timeout=600,
     )
     if add.returncode != 0:
-        run_command(["git", "worktree", "prune"], cwd=source_repo)
+        run_command(
+            ["git", "worktree", "remove", "--force", str(judge_dir)],
+            cwd=source_repo,
+            check=False,
+        )
         add = run_command(
             ["git", "worktree", "add", "--detach", str(judge_dir), row.base_sha],
             cwd=source_repo,
@@ -582,6 +698,7 @@ def run_judge_in_worktree(
     skip_permissions: bool,
 ) -> dict[str, Any]:
     judge_dir = setup_judge_worktree(source_repo, worktrees_dir, row, judge_id)
+    _register_worktree(judge_dir)
 
     try:
         benchmark_dir = judge_dir / ".benchmark"
@@ -599,8 +716,10 @@ def run_judge_in_worktree(
 
         prompt = _load_prompt("judge").format(
             task=row.task,
-            expected_diff=truncate_middle(row.gold_patch, 40_000),
-            agent_diff=truncate_middle(agent_diff, 40_000),
+            expected_diff=row.gold_patch,
+            agent_diff=agent_diff,
+            review_assessment=_format_review_for_judge(review),
+            compilation_summary=compilation_summary,
         )
         cmd = [
             opencode_bin,
@@ -616,7 +735,7 @@ def run_judge_in_worktree(
             cmd.append("--dangerously-skip-permissions")
         cmd.append(prompt)
 
-        proc = run_command(cmd, cwd=judge_dir, timeout=timeout)
+        proc = run_command(cmd, cwd=judge_dir, timeout=timeout, retries_on_timeout=1)
         text = extract_text_from_opencode_json(proc.stdout) or proc.stdout.strip()
         parsed = parse_json_object(text)
         if parsed is None:
@@ -628,24 +747,65 @@ def run_judge_in_worktree(
             }
         for key in ("correctness", "completeness", "convention_adherence", "hygiene"):
             if key in parsed and isinstance(parsed[key], (int, float)):
-                parsed[key] = max(0, min(10, int(round(parsed[key]))))
-        try:
-            computed = round(
-                0.35 * float(parsed.get("correctness", 0))
-                + 0.30 * float(parsed.get("completeness", 0))
-                + 0.20 * float(parsed.get("convention_adherence", 0))
-                + 0.15 * float(parsed.get("hygiene", 0)),
-                2,
-            )
-            parsed["overall"] = computed
-        except (TypeError, ValueError):
-            pass
+                parsed[key] = max(0.0, min(10.0, float(parsed[key])))
+        has_dimensions = any(isinstance(parsed.get(k), (int, float)) for k in ("correctness", "completeness", "convention_adherence", "hygiene"))
+        has_overall = isinstance(parsed.get("overall"), (int, float))
+        
+        if has_dimensions:
+            try:
+                computed = round(
+                    0.35 * float(parsed.get("correctness", 0))
+                    + 0.30 * float(parsed.get("completeness", 0))
+                    + 0.20 * float(parsed.get("convention_adherence", 0))
+                    + 0.15 * float(parsed.get("hygiene", 0)),
+                    2,
+                )
+                parsed["overall"] = computed
+            except (TypeError, ValueError):
+                pass
+        elif has_overall:
+            print(f"  [Judge {judge_id}] WARNING: Judge returned overall={parsed['overall']} but no individual dimension scores. Preserving judge's overall.", flush=True)
         parsed["parse_error"] = False
         parsed["returncode"] = proc.returncode
         parsed["judge_id"] = judge_id
         return parsed
     finally:
         teardown_judge_worktree(source_repo, judge_dir)
+        _unregister_worktree(judge_dir)
+
+
+def _json_safe_value(obj: Any) -> Any:
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe_value(item) for item in obj]
+    if isinstance(obj, dict):
+        return {str(k): _json_safe_value(v) for k, v in obj.items()}
+    return str(obj)
+
+
+def _format_review_for_judge(review: dict[str, Any] | None) -> str:
+    if review is None:
+        return "(No prior review was produced for this task.)"
+    if review.get("parse_error"):
+        return "(The prior review could not be parsed.)"
+
+    actionable_keys = [
+        "executive_summary",
+        "approach_analysis",
+        "breaking_changes",
+        "logic_assessment",
+        "convention_compliance",
+        "compilation_assessment",
+    ]
+    trimmed = {k: review[k] for k in actionable_keys if k in review}
+    if review.get("_auditor_corrections"):
+        trimmed["_auditor_corrections"] = review["_auditor_corrections"]
+    safe = _json_safe_value(trimmed)
+    try:
+        return json.dumps(safe, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return "(The review contained data that could not be serialized.)"
 
 
 def format_compilation_results(results: CompilationResults) -> str:
@@ -671,6 +831,12 @@ def format_compilation_results(results: CompilationResults) -> str:
     return "\n".join(lines)
 
 
+def _clean_opencode_artifacts(worktree: Path) -> None:
+    omo_dir = worktree / ".omo"
+    if omo_dir.exists():
+        shutil.rmtree(omo_dir, ignore_errors=True)
+
+
 def run_pr_reviewer(
     *,
     worktree: Path,
@@ -685,8 +851,8 @@ def run_pr_reviewer(
     compilation_summary = format_compilation_results(compilation_results)
     prompt = _load_prompt("reviewer").format(
         task=row.task,
-        gold_patch=truncate_middle(row.gold_patch, 40_000),
-        agent_diff=truncate_middle(agent_diff, 40_000),
+        gold_patch=row.gold_patch,
+        agent_diff=agent_diff,
         compilation_result=compilation_summary,
     )
     cmd = [
@@ -702,7 +868,7 @@ def run_pr_reviewer(
     if skip_permissions:
         cmd.append("--dangerously-skip-permissions")
     cmd.append(prompt)
-    proc = run_command(cmd, cwd=worktree, timeout=timeout)
+    proc = run_command(cmd, cwd=worktree, timeout=timeout, retries_on_timeout=1)
     text = extract_text_from_opencode_json(proc.stdout) or proc.stdout.strip()
     parsed = parse_json_object(text)
     if parsed is None:
@@ -717,26 +883,40 @@ def run_pr_reviewer(
     return parsed
 
 
-def run_llm_judge(
+def run_review_auditor(
     *,
     worktree: Path,
     row: TaskRow,
     agent_diff: str,
+    review: dict[str, Any],
+    compilation_results: CompilationResults,
     opencode_bin: str,
-    judge_model: str,
+    auditor_model: str,
     timeout: int,
     skip_permissions: bool,
 ) -> dict[str, Any]:
-    prompt = _load_prompt("judge").format(
+    compilation_summary = format_compilation_results(compilation_results)
+    compilation_assessment = json.dumps(review.get("compilation_assessment", {}), ensure_ascii=False)
+    prompt = _load_prompt("auditor").format(
         task=row.task,
-        expected_diff=truncate_middle(row.gold_patch, 40_000),
-        agent_diff=truncate_middle(agent_diff, 40_000),
+        agent_diff=agent_diff,
+        compilation_assessment=compilation_assessment,
+        compilation_results=compilation_summary,
     )
-    cmd = [opencode_bin, "run", "--dir", str(worktree), "--format", "json", "--model", judge_model]
+    cmd = [
+        opencode_bin,
+        "run",
+        "--dir",
+        str(worktree),
+        "--format",
+        "json",
+        "--model",
+        auditor_model,
+    ]
     if skip_permissions:
         cmd.append("--dangerously-skip-permissions")
     cmd.append(prompt)
-    proc = run_command(cmd, cwd=worktree, timeout=timeout)
+    proc = run_command(cmd, cwd=worktree, timeout=timeout, retries_on_timeout=1)
     text = extract_text_from_opencode_json(proc.stdout) or proc.stdout.strip()
     parsed = parse_json_object(text)
     if parsed is None:
@@ -746,30 +926,9 @@ def run_llm_judge(
             "raw_excerpt": text[:2000],
             "stderr_excerpt": proc.stderr[-2000:],
         }
-    for key in ("correctness", "completeness", "convention_adherence", "hygiene"):
-        if key in parsed and isinstance(parsed[key], (int, float)):
-            parsed[key] = max(0, min(10, int(round(parsed[key]))))
-    try:
-        computed = round(
-            0.35 * float(parsed.get("correctness", 0))
-            + 0.30 * float(parsed.get("completeness", 0))
-            + 0.20 * float(parsed.get("convention_adherence", 0))
-            + 0.15 * float(parsed.get("hygiene", 0)),
-            2,
-        )
-        parsed["overall"] = computed
-    except (TypeError, ValueError):
-        pass
     parsed["parse_error"] = False
     parsed["returncode"] = proc.returncode
     return parsed
-
-
-def truncate_middle(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    keep = max((limit - 200) // 2, 1000)
-    return text[:keep] + f"\n\n[truncated {len(text) - 2 * keep} chars]\n\n" + text[-keep:]
 
 
 def write_text(path: Path, text: str) -> None:
@@ -780,6 +939,29 @@ def write_text(path: Path, text: str) -> None:
 def write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _find_completed_row_indices(results_dir: Path) -> set[int]:
+    """Return indices of rows that completed successfully (have result.json with status='ok')."""
+    completed: set[int] = set()
+    if not results_dir.exists():
+        return completed
+    for entry in results_dir.iterdir():
+        if entry.is_dir() and entry.name.startswith("row_"):
+            try:
+                idx = int(entry.name.split("_")[1])
+                result_file = entry / "result.json"
+                if result_file.exists():
+                    try:
+                        data = json.loads(result_file.read_text(encoding="utf-8"))
+                        if data.get("status") == "ok":
+                            completed.add(idx)
+                    except (json.JSONDecodeError, OSError):
+                        # Corrupt or unreadable result.json — treat as incomplete
+                        pass
+            except (ValueError, IndexError):
+                continue
+    return completed
 
 
 def select_rows(rows: list[TaskRow], args: argparse.Namespace) -> list[TaskRow]:
@@ -799,6 +981,8 @@ def select_rows(rows: list[TaskRow], args: argparse.Namespace) -> list[TaskRow]:
 
 def run_one(row: TaskRow, args: argparse.Namespace) -> dict[str, Any]:
     source_repo = args.repo.resolve()
+    global _SOURCE_REPO
+    _SOURCE_REPO = source_repo
     out_name = f"row_{row.index:04d}_pr_{safe_slug(row.pr_number, str(row.index))}"
     out_dir = (args.results_dir / out_name).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -820,61 +1004,113 @@ def run_one(row: TaskRow, args: argparse.Namespace) -> dict[str, Any]:
         worktree = setup_worktree(source_repo, args.worktrees_dir.resolve(), row, args.keep_existing_worktrees)
         result["worktree"] = str(worktree)
 
-        proc, prompt = run_opencode_agent(
-            worktree=worktree,
-            row=row,
-            opencode_bin=args.opencode_bin,
-            model=args.model,
-            prompt_file=args.prompt_file,
-            timeout=args.timeout_seconds,
-            skip_permissions=not args.no_skip_permissions,
-            extra_env=parse_env_overrides(args.env),
-        )
+        MAX_AGENT_ATTEMPTS = 2
+        agent_stdout_parts: list[str] = []
+        agent_stderr_parts: list[str] = []
+        last_agent_proc: CommandResult | None = None
+        last_prompt: str = ""
 
-        agent_diff = capture_diff(worktree)
+        for attempt in range(1, MAX_AGENT_ATTEMPTS + 1):
+            if _SHUTDOWN_REQUESTED.is_set():
+                break
+
+            if attempt > 1:
+                with _PRINT_LOCK:
+                    print(f"  [{row.index}] Agent attempt {attempt - 1} produced empty patch. Retrying...", flush=True)
+                run_command(["git", "checkout", "-f", row.base_sha], cwd=worktree, check=True)
+                run_command(["git", "clean", "-fd"], cwd=worktree, check=True)
+                _clean_opencode_artifacts(worktree)
+
+            effective_task = row.task
+            if attempt > 1:
+                effective_task = (
+                    row.task
+                    + "\n\n---\n"
+                    + "IMPORTANT: You previously explored the codebase but did not make any code changes. "
+                    + "This benchmark measures your ability to produce working patches. "
+                    + "Please identify the exact files that need modification and make the minimal correct changes. "
+                    + "Do not stop after research—complete the implementation."
+                )
+
+            temp_row = TaskRow(
+                index=row.index,
+                task=effective_task,
+                gold_patch=row.gold_patch,
+                repo=row.repo,
+                pr_number=row.pr_number,
+                base_sha=row.base_sha,
+                head_sha=row.head_sha,
+                metadata=row.metadata,
+            )
+
+            proc, prompt = run_opencode_agent(
+                worktree=worktree,
+                row=temp_row,
+                opencode_bin=args.opencode_bin,
+                model=args.model,
+                prompt_file=args.prompt_file,
+                timeout=args.timeout_seconds,
+                skip_permissions=not args.no_skip_permissions,
+                extra_env=parse_env_overrides(args.env),
+            )
+            last_agent_proc = proc
+            last_prompt = prompt
+            agent_stdout_parts.append(proc.stdout)
+            agent_stderr_parts.append(proc.stderr)
+
+            _clean_opencode_artifacts(worktree)
+
+            agent_diff = capture_diff(worktree)
+            has_patch = bool(agent_diff.strip())
+
+            if has_patch or attempt == MAX_AGENT_ATTEMPTS:
+                break
+
+            with _PRINT_LOCK:
+                print(f"  [{row.index}] Agent attempt {attempt} complete but empty patch. Will retry.", flush=True)
+
+        if last_agent_proc is None:
+            raise BenchmarkError("No agent attempts were executed")
+
         changed_files = sorted(changed_files_from_patch(agent_diff))
         comparison = compare_diffs(agent_diff, row.gold_patch)
         style = style_check(agent_diff)
 
-        write_text(out_dir / "prompt.txt", prompt)
-        write_text(out_dir / "opencode.stdout.jsonl", proc.stdout)
-        write_text(out_dir / "opencode.stderr.txt", proc.stderr)
+        write_text(out_dir / "prompt.txt", last_prompt)
+        write_text(out_dir / "opencode.stdout.jsonl", "\n".join(agent_stdout_parts))
+        write_text(out_dir / "opencode.stderr.txt", "\n".join(agent_stderr_parts))
         write_text(out_dir / "agent.patch", agent_diff)
         write_text(out_dir / "gold.patch", row.gold_patch)
-        write_json(out_dir / "metadata.json", row.metadata)
-        write_json(out_dir / "comparison.json", comparison)
-        write_json(out_dir / "style_rule.json", style)
-        write_json(out_dir / "changed_files.json", changed_files)
 
-        compilation_results: dict[str, CommandResult] = {}
+        result["agent_attempts"] = len(agent_stdout_parts)
+        result["agent_empty_patch_retries"] = len(agent_stdout_parts) - 1
+
+        compilation_results = CompilationResults(checks={}, scope="skipped")
         if args.run_compilation_check:
-            print(f"  [{row.index}] Running compilation checks...", flush=True)
-            compilation_results = run_compilation_checks(
-                worktree=worktree,
-                changed_files=changed_files,
-                timeout_per_check=args.compilation_timeout_seconds,
-            )
-            write_json(
-                out_dir / "compilation.json",
-                {
-                    "checks": {
-                        name: {
-                            "returncode": res.returncode,
-                            "elapsed_seconds": round(res.elapsed_seconds, 2),
-                            "stdout_excerpt": res.stdout[:2000],
-                            "stderr_excerpt": res.stderr[:2000],
-                        }
-                        for name, res in compilation_results.checks.items()
-                    },
-                    "summary": {
-                        "passed": sum(1 for r in compilation_results.checks.values() if r.returncode == 0),
-                        "total": len(compilation_results.checks),
-                    },
-                },
-            )
+            try:
+                print(f"  [{row.index}] Running compilation checks...", flush=True)
+                compilation_results = run_compilation_checks(
+                    worktree=worktree,
+                    changed_files=changed_files,
+                    timeout_per_check=args.compilation_timeout_seconds,
+                )
+            except Exception as exc:
+                print(f"  [{row.index}] Compilation checks FAILED: {exc}", flush=True)
+                compilation_results = CompilationResults(
+                    checks={"cargo_check_affected": CommandResult(
+                        returncode=-1,
+                        stdout="",
+                        stderr=f"Compilation check failed with exception: {exc}",
+                        elapsed_seconds=0.0,
+                    )},
+                    scope="error",
+                )
 
         review = None
-        if args.reviewer_model:
+        try:
+            reviewer_model = args.reviewer_model or args.model
+            if not reviewer_model:
+                raise BenchmarkError("No reviewer model specified and no fallback --model provided")
             print(f"  [{row.index}] Running PR reviewer...", flush=True)
             review = run_pr_reviewer(
                 worktree=worktree,
@@ -882,60 +1118,120 @@ def run_one(row: TaskRow, args: argparse.Namespace) -> dict[str, Any]:
                 agent_diff=agent_diff,
                 compilation_results=compilation_results,
                 opencode_bin=args.opencode_bin,
-                reviewer_model=args.reviewer_model,
+                reviewer_model=reviewer_model,
                 timeout=args.reviewer_timeout_seconds,
                 skip_permissions=not args.no_skip_permissions,
             )
             write_json(out_dir / "review.json", review)
+        except Exception as exc:
+            print(f"  [{row.index}] PR reviewer FAILED: {exc}", flush=True)
+            review = {
+                "parse_error": True,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+                "executive_summary": f"Reviewer failed with error: {exc}",
+            }
+            write_json(out_dir / "review.json", review)
+
+        audit = None
+        try:
+            auditor_model = args.auditor_model or reviewer_model
+            if review is not None:
+                print(f"  [{row.index}] Running compilation auditor...", flush=True)
+                audit = run_review_auditor(
+                    worktree=worktree,
+                    row=row,
+                    agent_diff=agent_diff,
+                    review=review,
+                    compilation_results=compilation_results,
+                    opencode_bin=args.opencode_bin,
+                    auditor_model=auditor_model,
+                    timeout=args.auditor_timeout_seconds,
+                    skip_permissions=not args.no_skip_permissions,
+                )
+                if not audit.get("parse_error") and audit.get("verdict") == "warn":
+                    issues = audit.get("issues_found", [])
+                    if issues:
+                        corrections = "\n".join(
+                            f"- [{i.get('severity', 'unknown').upper()}] {i.get('description', '')}\n  Recommendation: {i.get('recommendation', '')}"
+                            for i in issues
+                        )
+                        corrected = audit.get("corrected_assessment", "")
+                        if corrected:
+                            corrections = f"CORRECTED COMPILATION ASSESSMENT: {corrected}\n\n" + corrections
+                        review["_auditor_corrections"] = corrections
+                        print(f"  [{row.index}] AUDITOR WARNING: {len(issues)} issue(s) found in review", flush=True)
+                write_json(out_dir / "audit.json", audit)
+            else:
+                print(f"  [{row.index}] Skipping auditor: no review available", flush=True)
+        except Exception as exc:
+            print(f"  [{row.index}] Compilation auditor FAILED: {exc}", flush=True)
+            audit = {
+                "parse_error": True,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+                "verdict": "pass",
+                "notes": "Auditor failed to run, so no corrections applied.",
+            }
+            write_json(out_dir / "audit.json", audit)
 
         judges: list[dict[str, Any]] = []
-        if args.judge_model and args.judge_count > 0:
-            compilation_summary = format_compilation_results(compilation_results)
-            review_for_judges = review or {}
+        try:
+            judge_model = args.judge_model or reviewer_model
+            judge_count = args.judge_count if args.judge_count > 0 else 1
+            if judge_model:
+                compilation_summary = format_compilation_results(compilation_results)
+                review_for_judges = review or {}
 
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+                with ThreadPoolExecutor(max_workers=judge_count) as pool:
+                    futures = {}
+                    for judge_id in range(judge_count):
+                        future = pool.submit(
+                            run_judge_in_worktree,
+                            judge_id=judge_id,
+                            source_repo=source_repo,
+                            worktrees_dir=args.judges_worktrees_dir.resolve(),
+                            row=row,
+                            agent_diff=agent_diff,
+                            review=review_for_judges,
+                            compilation_summary=compilation_summary,
+                            opencode_bin=args.opencode_bin,
+                            judge_model=judge_model,
+                            timeout=args.judge_timeout_seconds,
+                            skip_permissions=not args.no_skip_permissions,
+                        )
+                        futures[future] = judge_id
 
-            with ThreadPoolExecutor(max_workers=args.judge_count) as pool:
-                futures = {}
-                for judge_id in range(args.judge_count):
-                    future = pool.submit(
-                        run_judge_in_worktree,
-                        judge_id=judge_id,
-                        source_repo=source_repo,
-                        worktrees_dir=args.judges_worktrees_dir.resolve(),
-                        row=row,
-                        agent_diff=agent_diff,
-                        review=review_for_judges,
-                        compilation_summary=compilation_summary,
-                        opencode_bin=args.opencode_bin,
-                        judge_model=args.judge_model,
-                        timeout=args.judge_timeout_seconds,
-                        skip_permissions=not args.no_skip_permissions,
-                    )
-                    futures[future] = judge_id
+                    for future in as_completed(futures):
+                        judge_id = futures[future]
+                        try:
+                            judge_result = future.result()
+                            judges.append(judge_result)
+                            print(f"  [{row.index}] Judge {judge_id + 1}/{judge_count} completed", flush=True)
+                        except Exception as exc:
+                            error_judge = {
+                                "judge_id": judge_id,
+                                "error": str(exc),
+                                "error_type": type(exc).__name__,
+                            }
+                            judges.append(error_judge)
+                            print(f"  [{row.index}] Judge {judge_id + 1}/{judge_count} FAILED: {exc}", flush=True)
 
-                for future in as_completed(futures):
-                    judge_id = futures[future]
-                    try:
-                        judge_result = future.result()
-                        write_json(out_dir / f"judge_{judge_id:02d}.json", judge_result)
-                        judges.append(judge_result)
-                        print(f"  [{row.index}] Judge {judge_id + 1}/{args.judge_count} completed", flush=True)
-                    except Exception as exc:
-                        error_judge = {
-                            "judge_id": judge_id,
-                            "error": str(exc),
-                            "error_type": type(exc).__name__,
-                        }
-                        write_json(out_dir / f"judge_{judge_id:02d}.json", error_judge)
-                        judges.append(error_judge)
-                        print(f"  [{row.index}] Judge {judge_id + 1}/{args.judge_count} FAILED: {exc}", flush=True)
+                write_json(out_dir / "judges.json", judges)
+            else:
+                print(f"  [{row.index}] Skipping judges: no judge model specified", flush=True)
+        except Exception as exc:
+            print(f"  [{row.index}] Judge execution FAILED: {exc}", flush=True)
+            judges.append({
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            })
 
         result.update(
             {
                 "status": "ok",
-                "agent_returncode": proc.returncode,
-                "agent_elapsed_seconds": round(proc.elapsed_seconds, 2),
+                "agent_returncode": last_agent_proc.returncode,
+                "agent_elapsed_seconds": round(last_agent_proc.elapsed_seconds, 2),
                 "has_patch": bool(agent_diff.strip()),
                 "num_changed_files": len(changed_files),
                 "changed_files": changed_files,
@@ -963,10 +1259,8 @@ def run_one(row: TaskRow, args: argparse.Namespace) -> dict[str, Any]:
             "pr_number": row.pr_number,
             "base_sha": row.base_sha,
             "head_sha": row.head_sha,
-            "task": row.task,
-            "gold_patch": row.gold_patch,
-            "agent_patch": agent_diff,
-            "agent_returncode": proc.returncode,
+            "results_dir": str(out_dir),
+            "agent_returncode": last_agent_proc.returncode,
             "file_f1": comparison["file_scores"]["f1"],
             "style_score": style["score"],
             "compilation": {
@@ -986,8 +1280,9 @@ def run_one(row: TaskRow, args: argparse.Namespace) -> dict[str, Any]:
         if args.runs_dir:
             args.runs_dir.mkdir(parents=True, exist_ok=True)
             run_path = args.runs_dir / f"run_{args.run_id}.jsonl"
-            with run_path.open("a", encoding="utf-8") as f:
-                f.write(run_line)
+            with _WRITE_LOCK:
+                with run_path.open("a", encoding="utf-8") as f:
+                    f.write(run_line)
 
     except Exception as exc:
         result.update(
@@ -1007,6 +1302,7 @@ def run_one(row: TaskRow, args: argparse.Namespace) -> dict[str, Any]:
         resolved_worktree = worktree.resolve()
         if resolved_root in resolved_worktree.parents:
             run_command(["git", "worktree", "remove", "--force", str(worktree)], cwd=source_repo)
+            _unregister_worktree(worktree)
 
     return result
 
@@ -1032,14 +1328,20 @@ def validate_args(args: argparse.Namespace) -> None:
         raise BenchmarkError(f"Repo path does not look like a git checkout: {args.repo}")
     if not shutil.which(args.opencode_bin):
         raise BenchmarkError(f"opencode binary not found on PATH: {args.opencode_bin}")
+    if args.run_compilation_check and not shutil.which("cargo"):
+        raise BenchmarkError("'cargo' not found on PATH but --run-compilation-check was requested. Ensure rustup/cargo is installed and on PATH.")
     if args.timeout_seconds <= 0:
         raise BenchmarkError("--timeout-seconds must be positive")
     if args.reviewer_model and args.reviewer_timeout_seconds <= 0:
         raise BenchmarkError("--reviewer-timeout-seconds must be positive")
+    if args.auditor_model and args.auditor_timeout_seconds <= 0:
+        raise BenchmarkError("--auditor-timeout-seconds must be positive")
     if args.judge_model and args.judge_timeout_seconds <= 0:
         raise BenchmarkError("--judge-timeout-seconds must be positive")
     if args.run_compilation_check and args.compilation_timeout_seconds <= 0:
         raise BenchmarkError("--compilation-timeout-seconds must be positive")
+    if args.parallel_workers <= 0:
+        raise BenchmarkError("--parallel-workers must be >= 1")
 
 
 def main() -> int:
@@ -1053,12 +1355,14 @@ def main() -> int:
     parser.add_argument("--prompt-file", type=Path, default=None, help="Optional prompt template file containing {task}")
     parser.add_argument("--timeout-seconds", type=int, default=1800)
     parser.add_argument("--judge-model", default=None, help="Optional opencode model string for LLM judging")
-    parser.add_argument("--judge-timeout-seconds", type=int, default=600)
+    parser.add_argument("--judge-timeout-seconds", type=int, default=900)
     parser.add_argument("--judge-count", type=int, default=1, help="Number of independent judges to run per task")
     parser.add_argument("--reviewer-model", default=None, help="Optional opencode model string for PR reviewer")
-    parser.add_argument("--reviewer-timeout-seconds", type=int, default=600)
+    parser.add_argument("--reviewer-timeout-seconds", type=int, default=1200)
+    parser.add_argument("--auditor-model", default=None, help="Optional opencode model string for review auditor (validates compilation assessment)")
+    parser.add_argument("--auditor-timeout-seconds", type=int, default=600, help="Timeout for compilation auditor (default: 600s = 10 min)")
     parser.add_argument("--run-compilation-check", action="store_true", help="Run cargo check on the agent's worktree before judging")
-    parser.add_argument("--compilation-timeout-seconds", type=int, default=300)
+    parser.add_argument("--compilation-timeout-seconds", type=int, default=900)
     parser.add_argument("--judges-worktrees-dir", type=Path, default=None, help="Directory for judge worktrees (defaults to worktrees-dir)")
     parser.add_argument("--runs-dir", type=Path, default=Path(__file__).parent / "runs", help="Directory for run JSONL records")
     parser.add_argument("--run-id", type=str, default=None, help="Unique run ID (auto-generated if not provided)")
@@ -1068,7 +1372,9 @@ def main() -> int:
     parser.add_argument("--pr-number", action="append", help="Run only this PR number. May be repeated.")
     parser.add_argument("--keep-existing-worktrees", action="store_true", help="Reuse/reset existing worktree dirs instead of deleting first")
     parser.add_argument("--no-skip-permissions", action="store_true", help="Do not pass --dangerously-skip-permissions to opencode")
+    parser.add_argument("--resume", action="store_true", help="Skip rows that completed successfully (result.json with status=ok) and continue with remaining rows")
     parser.add_argument("--env", action="append", help="Extra environment variable for opencode, KEY=VALUE. May be repeated.")
+    parser.add_argument("--parallel-workers", type=int, default=1, help="Number of tasks to process concurrently (default: 1)")
     args = parser.parse_args()
 
     if args.run_id is None:
@@ -1079,6 +1385,13 @@ def main() -> int:
     try:
         validate_args(args)
         rows = select_rows(load_rows(args.dataset), args)
+        
+        if args.resume:
+            completed = _find_completed_row_indices(args.results_dir)
+            if completed:
+                rows = [row for row in rows if row.index not in completed]
+                print(f"[resume] Found {len(completed)} completed rows. Re-running {len(rows)} remaining row(s).", flush=True)
+        
         args.results_dir.mkdir(parents=True, exist_ok=True)
         if not rows:
             raise BenchmarkError("No rows selected")
@@ -1086,20 +1399,96 @@ def main() -> int:
         summary_path = args.results_dir / "summary.jsonl"
         aggregate: list[dict[str, Any]] = []
         with summary_path.open("a", encoding="utf-8") as summary_f:
-            for pos, row in enumerate(rows, start=1):
-                print(f"[{pos}/{len(rows)}] row={row.index} pr={row.pr_number} base={row.base_sha[:12]}", flush=True)
-                result = run_one(row, args)
-                aggregate.append(result)
-                summary_f.write(json.dumps(result, ensure_ascii=False) + "\n")
-                summary_f.flush()
+            completed_count: int = 0
+            total_rows: int = len(rows)
+
+            def _log_result(result: dict[str, Any]) -> None:
+                nonlocal completed_count
+                completed_count += 1
                 status = result.get("status")
                 judge_agg = result.get("judge_aggregate", {})
                 judge = judge_agg.get("final_score", {}).get("overall")
-                print(
-                    f"  status={status} patch={result.get('has_patch')} "
-                    f"file_f1={result.get('file_f1')} style={result.get('style_score')} judge={judge}",
-                    flush=True,
-                )
+                with _PRINT_LOCK:
+                    print(
+                        f"[{completed_count}/{total_rows}] row={result.get('row_index')} "
+                        f"pr={result.get('pr_number')} base={result.get('base_sha', '')[:12]} "
+                        f"status={status} patch={result.get('has_patch')} "
+                        f"file_f1={result.get('file_f1')} style={result.get('style_score')} judge={judge}",
+                        flush=True,
+                    )
+
+            if args.parallel_workers <= 1:
+                for pos, row in enumerate(rows, start=1):
+                    with _PRINT_LOCK:
+                        print(
+                            f"[{pos}/{total_rows}] row={row.index} pr={row.pr_number} base={row.base_sha[:12]}",
+                            flush=True,
+                        )
+                    result = run_one(row, args)
+                    aggregate.append(result)
+                    summary_f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    summary_f.flush()
+                    _log_result(result)
+            else:
+                cancelled = []
+                to_submit = []
+                for row in rows:
+                    if _SHUTDOWN_REQUESTED.is_set():
+                        cancelled.append(row)
+                    else:
+                        to_submit.append(row)
+
+                with ThreadPoolExecutor(max_workers=args.parallel_workers) as pool:
+                    futures = {pool.submit(run_one, row, args): row for row in to_submit}
+                    for future in as_completed(futures):
+                        row = futures[future]
+                        try:
+                            result = future.result()
+                        except Exception as exc:
+                            result = {
+                                "row_index": row.index,
+                                "repo": row.repo,
+                                "pr_number": row.pr_number,
+                                "base_sha": row.base_sha,
+                                "head_sha": row.head_sha,
+                                "model": args.model,
+                                "status": "error",
+                                "error_type": type(exc).__name__,
+                                "error": str(exc),
+                                "output_dir": str(
+                                    args.results_dir
+                                    / f"row_{row.index:04d}_pr_{safe_slug(row.pr_number, str(row.index))}"
+                                ),
+                            }
+                            with _PRINT_LOCK:
+                                print(f"[ERROR] row={row.index}: {exc}", flush=True)
+
+                        aggregate.append(result)
+                        with _WRITE_LOCK:
+                            summary_f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                            summary_f.flush()
+                        _log_result(result)
+
+                for row in cancelled:
+                    result = {
+                        "row_index": row.index,
+                        "repo": row.repo,
+                        "pr_number": row.pr_number,
+                        "base_sha": row.base_sha,
+                        "head_sha": row.head_sha,
+                        "model": args.model,
+                        "status": "cancelled",
+                        "error": "Shutdown requested before task started",
+                        "output_dir": str(
+                            args.results_dir
+                            / f"row_{row.index:04d}_pr_{safe_slug(row.pr_number, str(row.index))}"
+                        ),
+                    }
+                    aggregate.append(result)
+                    with _WRITE_LOCK:
+                        summary_f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                        summary_f.flush()
+                    _log_result(result)
 
         ok = [r for r in aggregate if r.get("status") == "ok"]
         final = {
@@ -1111,20 +1500,24 @@ def main() -> int:
             "errors": len(aggregate) - len(ok),
             "mean_file_f1": round(sum(float(r.get("file_f1") or 0) for r in ok) / len(ok), 3) if ok else None,
             "mean_style_score": round(sum(float(r.get("style_score") or 0) for r in ok) / len(ok), 3) if ok else None,
-            "mean_judge_overall": round(
-                sum(
-                    float(r.get("judge_aggregate", {}).get("final_score", {}).get("overall") or 0)
-                    for r in ok
-                )
-                / max(
-                    1,
+            "mean_judge_overall": (
+                round(
                     sum(
+                        float(r.get("judge_aggregate", {}).get("final_score", {}).get("overall") or 0)
+                        for r in ok
+                    )
+                    / sum(
                         1
                         for r in ok
                         if r.get("judge_aggregate", {}).get("final_score", {}).get("overall") is not None
                     ),
-                ),
-                3,
+                    3,
+                )
+                if any(
+                    r.get("judge_aggregate", {}).get("final_score", {}).get("overall") is not None
+                    for r in ok
+                )
+                else None
             ) if args.judge_model else None,
             "summary_jsonl": str(summary_path),
         }

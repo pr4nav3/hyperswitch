@@ -67,8 +67,9 @@ def identify_outliers(
         )
 
     reasons = []
+    score_map = dict(zip(judge_ids, scores))
     for jid in outlier_ids:
-        sc = scores[judge_ids.index(jid)]
+        sc = score_map[jid]
         direction = "low" if sc < lower else "high"
         reasons.append(f"judge {jid} scored {sc} ({direction})")
 
