@@ -1,0 +1,140 @@
+diff --git a/crates/router/Cargo.toml b/crates/router/Cargo.toml
+index 4a4ba4987c..8a85c50b81 100644
+--- a/crates/router/Cargo.toml
++++ b/crates/router/Cargo.toml
+@@ -66,6 +66,7 @@ diesel = { version = "2.2.10", features = ["postgres"] }
+ dyn-clone = "1.0.19"
+ error-stack = "0.4.1"
+ futures = "0.3.31"
++encoding_rs = "0.8.35"
+ hex = "0.4.3"
+ hkdf = "0.12.4"
+ http = "0.2.12"
+diff --git a/crates/router/src/routes/payments.rs b/crates/router/src/routes/payments.rs
+index 09c6e86c52..9d8568e80f 100644
+--- a/crates/router/src/routes/payments.rs
++++ b/crates/router/src/routes/payments.rs
+@@ -1248,7 +1248,7 @@ pub async fn payments_connector_session(
+ pub async fn payments_redirect_response(
+     state: web::Data<app::AppState>,
+     req: actix_web::HttpRequest,
+-    json_payload: Option<web::Form<serde_json::Value>>,
++    body: actix_web::web::Bytes,
+     path: web::Path<(
+         common_utils::id_type::PaymentId,
+         common_utils::id_type::MerchantId,
+@@ -1265,7 +1265,7 @@ pub async fn payments_redirect_response(
+         resource_id: payment_types::PaymentIdType::PaymentIntentId(payment_id),
+         merchant_id: Some(merchant_id.clone()),
+         force_sync: true,
+-        json_payload: json_payload.map(|payload| payload.0),
++        json_payload: helpers::parse_redirect_response_payload(&req, body),
+         param: Some(param_string.to_string()),
+         connector: Some(connector),
+         creds_identifier: None,
+diff --git a/crates/router/src/routes/payments/helpers.rs b/crates/router/src/routes/payments/helpers.rs
+index 1185b20d17..190e90a124 100644
+--- a/crates/router/src/routes/payments/helpers.rs
++++ b/crates/router/src/routes/payments/helpers.rs
+@@ -96,3 +96,101 @@ pub fn populate_browser_info(
+     payload.browser_info = Some(encoded);
+     Ok(())
+ }
++
++/// Parses the redirect response payload from the request body, handling both JSON and
++/// form-urlencoded content types with various character encodings.
++///
++/// Upstream providers may send redirect responses with different content types and character
++/// encodings (e.g., UTF-8, ISO-8859-1, Windows-1252). This function robustly handles all
++/// variants by:
++/// - Attempting to parse the body as JSON first
++/// - Falling back to form-urlencoded parsing with encoding detection
++/// - Using encoding_rs to handle non-UTF-8 encodings gracefully
++pub fn parse_redirect_response_payload(
++    req: &actix_web::HttpRequest,
++    body: actix_web::web::Bytes,
++) -> Option<serde_json::Value> {
++    if body.is_empty() {
++        return None;
++    }
++
++    // Try parsing as JSON first (most common case)
++    if let Ok(json_value) = serde_json::from_slice::<serde_json::Value>(&body) {
++        return Some(json_value);
++    }
++
++    // Get content type from headers to detect encoding
++    let content_type = req
++        .headers()
++        .get(actix_web::http::header::CONTENT_TYPE)
++        .and_then(|ct| ct.to_str().ok());
++
++    // Determine the character encoding from content type or default to UTF-8
++    let encoding = content_type
++        .and_then(parse_encoding_from_content_type)
++        .unwrap_or(encoding_rs::UTF_8);
++
++    // Decode bytes using detected encoding
++    let (decoded_str, _, had_errors) = encoding.decode(&body);
++
++    if had_errors {
++        logger::warn!(
++            "Encoding errors encountered while decoding redirect response payload, attempting fallback parsing"
++        );
++    }
++
++    let body_str = decoded_str.as_ref();
++
++    // Try parsing decoded string as JSON
++    if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body_str) {
++        return Some(json_value);
++    }
++
++    // Try parsing as form-urlencoded data
++    if let Ok(form_data) = serde_urlencoded::from_str::<std::collections::HashMap<String, String>>(
++        body_str,
++    ) {
++        return serde_json::to_value(form_data).ok();
++    }
++
++    // If all parsing attempts fail, return the raw body as a string value
++    logger::warn!(
++        "Failed to parse redirect response payload as structured data, returning as string"
++    );
++    Some(serde_json::Value::String(body_str.to_string()))
++}
++
++/// Extracts the character encoding from a Content-Type header value.
++///
++/// Supports common encodings used by upstream payment providers.
++fn parse_encoding_from_content_type(content_type: &str) -> Option<&'static encoding_rs::Encoding> {
++    // Extract charset parameter from content type
++    let charset = content_type
++        .to_lowercase()
++        .split(';')
++        .find_map(|part| {
++            let part = part.trim();
++            if part.starts_with("charset=") {
++                Some(part["charset=".len()..].trim().trim_matches('"'))
++            } else {
++                None
++            }
++        });
++
++    match charset {
++        Some("utf-8") => Some(encoding_rs::UTF_8),
++        Some("iso-8859-1") | Some("latin1") | Some("latin-1") => Some(encoding_rs::WINDOWS_1252),
++        Some("iso-8859-15") | Some("latin9") | Some("latin-9") => {
++            Some(encoding_rs::ISO_8859_15)
++        }
++        Some("windows-1252") | Some("cp1252") => Some(encoding_rs::WINDOWS_1252),
++        Some("iso-8859-10") | Some("latin6") | Some("latin-6") => {
++            Some(encoding_rs::ISO_8859_10)
++        }
++        Some(other) => {
++            // Try to get encoding from encoding_rs by label
++            encoding_rs::Encoding::for_label(other.as_bytes())
++        }
++        None => None,
++    }
++}

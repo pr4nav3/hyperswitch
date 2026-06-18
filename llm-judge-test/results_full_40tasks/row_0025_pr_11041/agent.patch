@@ -1,0 +1,178 @@
+diff --git a/crates/hyperswitch_connectors/src/connectors/barclaycard.rs b/crates/hyperswitch_connectors/src/connectors/barclaycard.rs
+index 3bf9d53e9d..81166e40bf 100644
+--- a/crates/hyperswitch_connectors/src/connectors/barclaycard.rs
++++ b/crates/hyperswitch_connectors/src/connectors/barclaycard.rs
+@@ -1649,49 +1649,39 @@ impl ConnectorSpecifications for Barclaycard {
+     /// Check if authentication flow is required
+     fn is_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+-            api::CurrentFlowInfo::Authorize { .. } => {
+-                // during authorize flow, there is no post_authentication call needed
+-                false
+-            }
+             api::CurrentFlowInfo::CompleteAuthorize {
+                 request_data,
+-                payment_method: _,
++                ..
+             } => {
+-                // TODO: add logic before deciding the pre processing flow Authenticate or PostAuthenticate
+                 let redirection_params = request_data
+                     .redirect_response
+                     .as_ref()
+                     .and_then(|redirect_response| redirect_response.params.as_ref());
+-                match redirection_params {
+-                    Some(param) if !param.peek().is_empty() => true,
+-                    Some(_) | None => false,
+-                }
++                matches!(
++                    redirection_params,
++                    Some(param) if !param.peek().is_empty()
++                )
+             }
+-            api::CurrentFlowInfo::SetupMandate { .. } => false,
++            _ => false,
+         }
+     }
+     /// Check if post-authentication flow is required
+     fn is_post_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+-            api::CurrentFlowInfo::Authorize { .. } => {
+-                // during authorize flow, there is no post_authentication call needed
+-                false
+-            }
+             api::CurrentFlowInfo::CompleteAuthorize {
+                 request_data,
+-                payment_method: _,
++                ..
+             } => {
+-                // TODO: add logic before deciding the pre processing flow Authenticate or PostAuthenticate
+                 let redirection_params = request_data
+                     .redirect_response
+                     .as_ref()
+                     .and_then(|redirect_response| redirect_response.params.as_ref());
+-                match redirection_params {
+-                    Some(param) if !param.peek().is_empty() => false,
+-                    Some(_) | None => true,
+-                }
++                !matches!(
++                    redirection_params,
++                    Some(param) if !param.peek().is_empty()
++                )
+             }
+-            api::CurrentFlowInfo::SetupMandate { .. } => false,
++            _ => false,
+         }
+     }
+     fn get_connector_about(&self) -> Option<&'static ConnectorInfo> {
+diff --git a/crates/hyperswitch_connectors/src/connectors/cybersource.rs b/crates/hyperswitch_connectors/src/connectors/cybersource.rs
+index 240670538d..2c08642ef3 100644
+--- a/crates/hyperswitch_connectors/src/connectors/cybersource.rs
++++ b/crates/hyperswitch_connectors/src/connectors/cybersource.rs
+@@ -2338,49 +2338,39 @@ impl ConnectorSpecifications for Cybersource {
+     /// Check if authentication flow is required
+     fn is_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+-            api::CurrentFlowInfo::Authorize { .. } => {
+-                // during authorize flow, there is no post_authentication call needed
+-                false
+-            }
+             api::CurrentFlowInfo::CompleteAuthorize {
+                 request_data,
+-                payment_method: _,
++                ..
+             } => {
+-                // TODO: add logic before deciding the pre processing flow Authenticate or PostAuthenticate
+                 let redirection_params = request_data
+                     .redirect_response
+                     .as_ref()
+                     .and_then(|redirect_response| redirect_response.params.as_ref());
+-                match redirection_params {
+-                    Some(param) if !param.peek().is_empty() => true,
+-                    Some(_) | None => false,
+-                }
++                matches!(
++                    redirection_params,
++                    Some(param) if !param.peek().is_empty()
++                )
+             }
+-            api::CurrentFlowInfo::SetupMandate { .. } => false,
++            _ => false,
+         }
+     }
+     /// Check if post-authentication flow is required
+     fn is_post_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+-            api::CurrentFlowInfo::Authorize { .. } => {
+-                // during authorize flow, there is no post_authentication call needed
+-                false
+-            }
+             api::CurrentFlowInfo::CompleteAuthorize {
+                 request_data,
+-                payment_method: _,
++                ..
+             } => {
+-                // TODO: add logic before deciding the pre processing flow Authenticate or PostAuthenticate
+                 let redirection_params = request_data
+                     .redirect_response
+                     .as_ref()
+                     .and_then(|redirect_response| redirect_response.params.as_ref());
+-                match redirection_params {
+-                    Some(param) if !param.peek().is_empty() => false,
+-                    Some(_) | None => true,
+-                }
++                !matches!(
++                    redirection_params,
++                    Some(param) if !param.peek().is_empty()
++                )
+             }
+-            api::CurrentFlowInfo::SetupMandate { .. } => false,
++            _ => false,
+         }
+     }
+ }
+diff --git a/crates/hyperswitch_connectors/src/connectors/nmi.rs b/crates/hyperswitch_connectors/src/connectors/nmi.rs
+index b1a334f934..386b86d856 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nmi.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nmi.rs
+@@ -1194,9 +1194,9 @@ impl ConnectorSpecifications for Nmi {
+     fn is_pre_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+             api::CurrentFlowInfo::Authorize {
+-                request_data: _,
++                request_data,
+                 auth_type,
+-            } => *auth_type == enums::AuthenticationType::ThreeDs,
++            } => *auth_type == enums::AuthenticationType::ThreeDs && request_data.is_card(),
+             api::CurrentFlowInfo::CompleteAuthorize { .. } => false,
+             api::CurrentFlowInfo::SetupMandate { auth_type, .. } => {
+                 *auth_type == enums::AuthenticationType::ThreeDs
+diff --git a/crates/hyperswitch_connectors/src/connectors/nuvei.rs b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+index 5b22df4b05..5b59979d0e 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nuvei.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+@@ -1695,8 +1695,8 @@ impl ConnectorSpecifications for Nuvei {
+         match current_flow {
+             api::CurrentFlowInfo::Authorize {
+                 auth_type,
+-                request_data: _,
+-            } => *auth_type == enums::AuthenticationType::ThreeDs,
++                request_data,
++            } => *auth_type == enums::AuthenticationType::ThreeDs && request_data.is_card(),
+             api::CurrentFlowInfo::CompleteAuthorize { .. } => false,
+             api::CurrentFlowInfo::SetupMandate { auth_type, .. } => {
+                 *auth_type == enums::AuthenticationType::ThreeDs
+diff --git a/crates/hyperswitch_connectors/src/connectors/redsys.rs b/crates/hyperswitch_connectors/src/connectors/redsys.rs
+index 9a9a78b137..cfec2aa264 100644
+--- a/crates/hyperswitch_connectors/src/connectors/redsys.rs
++++ b/crates/hyperswitch_connectors/src/connectors/redsys.rs
+@@ -975,8 +975,8 @@ static REDSYS_SUPPORTED_WEBHOOK_FLOWS: [common_enums::EventClass; 0] = [];
+ impl ConnectorSpecifications for Redsys {
+     fn is_pre_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+-            api::CurrentFlowInfo::Authorize { auth_type, .. } => {
+-                *auth_type == common_enums::AuthenticationType::ThreeDs
++            api::CurrentFlowInfo::Authorize { auth_type, request_data } => {
++                *auth_type == common_enums::AuthenticationType::ThreeDs && request_data.is_card()
+             }
+             api::CurrentFlowInfo::CompleteAuthorize { .. } => false,
+             api::CurrentFlowInfo::SetupMandate { .. } => false,

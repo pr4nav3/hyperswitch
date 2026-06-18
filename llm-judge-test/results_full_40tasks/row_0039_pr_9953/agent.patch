@@ -1,0 +1,75 @@
+diff --git a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+index 3bcf66af57..8316a5f53d 100644
+--- a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+@@ -1516,15 +1516,69 @@ impl TryFrom<&PaypalRouterData<&PaymentsIncrementalAuthorizationRouterData>>
+ #[derive(Debug, Deserialize, Serialize)]
+ #[serde(rename_all = "snake_case")]
+ pub struct PaypalExtendedAuthResponse {
+-    status: PaypalIncrementalStatus,
++    status: PaypalExtendedAuthStatus,
+     status_details: Option<PaypalIncrementalAuthStatusDetails>,
+     id: String,
+     links: Vec<PaypalLinks>,
++    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
+     expiration_time: Option<PrimitiveDateTime>,
++    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
+     create_time: Option<PrimitiveDateTime>,
++    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
+     update_time: Option<PrimitiveDateTime>,
+ }
+ 
++#[derive(Debug, Clone, Deserialize, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub enum PaypalExtendedAuthStatus {
++    Created,
++    Captured,
++    Denied,
++    PartiallyCaptured,
++    Voided,
++    Pending,
++}
++
++impl From<PaypalExtendedAuthStatus> for common_enums::AuthorizationStatus {
++    fn from(item: PaypalExtendedAuthStatus) -> Self {
++        match item {
++            PaypalExtendedAuthStatus::Created
++            | PaypalExtendedAuthStatus::Captured
++            | PaypalExtendedAuthStatus::PartiallyCaptured => Self::Success,
++            PaypalExtendedAuthStatus::Pending => Self::Processing,
++            PaypalExtendedAuthStatus::Denied | PaypalExtendedAuthStatus::Voided => Self::Failure,
++        }
++    }
++}
++
++impl From<PaypalExtendedAuthStatus> for common_enums::AttemptStatus {
++    fn from(item: PaypalExtendedAuthStatus) -> Self {
++        match item {
++            PaypalExtendedAuthStatus::Created
++            | PaypalExtendedAuthStatus::Captured
++            | PaypalExtendedAuthStatus::PartiallyCaptured => Self::Authorized,
++            PaypalExtendedAuthStatus::Pending => Self::Pending,
++            PaypalExtendedAuthStatus::Denied | PaypalExtendedAuthStatus::Voided => Self::Failure,
++        }
++    }
++}
++
++fn is_extend_authorization_applied(
++    item: PaypalExtendedAuthStatus,
++) -> Option<common_types::primitive_wrappers::ExtendedAuthorizationAppliedBool> {
++    match item {
++        PaypalExtendedAuthStatus::Created
++        | PaypalExtendedAuthStatus::Captured
++        | PaypalExtendedAuthStatus::PartiallyCaptured => {
++            Some(common_types::primitive_wrappers::ExtendedAuthorizationAppliedBool::from(true))
++        }
++        PaypalExtendedAuthStatus::Pending => None,
++        PaypalExtendedAuthStatus::Denied | PaypalExtendedAuthStatus::Voided => {
++            Some(common_types::primitive_wrappers::ExtendedAuthorizationAppliedBool::from(false))
++        }
++    }
++}
++
+ #[derive(Debug, Deserialize, Serialize)]
+ pub struct PaypalIncrementalAuthResponse {
+     status: PaypalIncrementalStatus,

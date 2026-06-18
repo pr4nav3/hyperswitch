@@ -1,0 +1,20 @@
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index 61a5c94598..aae485942e 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -4374,8 +4374,13 @@ where
+     let is_ucs_granular_flow =
+         gateway::GRANULAR_GATEWAY_SUPPORTED_FLOWS.contains(&std::any::type_name::<F>());
+ 
+-    if is_ucs_granular_flow {
+-        logger::info!("Current flow is UCS Composite flow");
++    if is_ucs_granular_flow
++        && matches!(
++            execution_path,
++            ExecutionPath::UnifiedConnectorService | ExecutionPath::ShadowUnifiedConnectorService
++        )
++    {
++        logger::info!("Current flow is UCS Granular flow");
+         let lineage_ids = grpc_client::LineageIds::new(
+             business_profile.merchant_id.clone(),
+             business_profile.get_id().clone(),

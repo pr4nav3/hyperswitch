@@ -1,0 +1,168 @@
+From db2d6e5f66d8786960bbfca0501bfd84d5365d54 Mon Sep 17 00:00:00 2001
+From: Vani Gupta <vani.gupta@juspay.in>
+Date: Tue, 7 Apr 2026 13:30:44 +0530
+Subject: [PATCH 1/2] change from open banking uk to open banking
+
+---
+ config/config.example.toml                                | 2 +-
+ config/deployments/integration_test.toml                  | 2 +-
+ config/deployments/production.toml                        | 2 +-
+ config/deployments/sandbox.toml                           | 2 +-
+ config/development.toml                                   | 2 +-
+ config/docker_compose.toml                                | 2 +-
+ crates/connector_configs/toml/development.toml            | 2 +-
+ crates/connector_configs/toml/production.toml             | 2 +-
+ crates/connector_configs/toml/sandbox.toml                | 2 +-
+ crates/hyperswitch_connectors/src/connectors/truelayer.rs | 2 +-
+ loadtest/config/development.toml                          | 2 +-
+ 11 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/config/config.example.toml b/config/config.example.toml
+index 56bb7fcdd64..665731e1d0f 100644
+--- a/config/config.example.toml
++++ b/config/config.example.toml
+@@ -730,7 +730,7 @@ credit = { currency = "INR,USD,GBP,EUR" }
+ debit = { currency = "INR,USD,GBP,EUR" }
+ 
+ [pm_filters.truelayer]
+-open_banking_uk = { currency = "GBP,EUR" }
++open_banking = { currency = "GBP,EUR" }
+ 
+ [payout_method_filters.truelayer]
+ open_banking_uk = { currency = "GBP,EUR,PLN" }
+diff --git a/config/deployments/integration_test.toml b/config/deployments/integration_test.toml
+index ab73eb7ee9d..9a58093a931 100644
+--- a/config/deployments/integration_test.toml
++++ b/config/deployments/integration_test.toml
+@@ -663,7 +663,7 @@ credit = { currency = "INR,USD,GBP,EUR" }
+ debit = { currency = "INR,USD,GBP,EUR" }
+ 
+ [pm_filters.truelayer]
+-open_banking_uk = { currency = "GBP,EUR" }
++open_banking = { currency = "GBP,EUR" }
+ 
+ [payout_method_filters.truelayer]
+ open_banking_uk = { currency = "GBP,EUR,PLN" }
+diff --git a/config/deployments/production.toml b/config/deployments/production.toml
+index 025ef40df85..226d0d82b61 100644
+--- a/config/deployments/production.toml
++++ b/config/deployments/production.toml
+@@ -706,7 +706,7 @@ credit = { currency = "INR,USD,GBP,EUR" }
+ debit = { currency = "INR,USD,GBP,EUR" }
+ 
+ [pm_filters.truelayer]
+-open_banking_uk = { currency = "GBP,EUR" }
++open_banking = { currency = "GBP,EUR" }
+ 
+ [payout_method_filters.truelayer]
+ open_banking_uk = { currency = "GBP,EUR,PLN" }
+diff --git a/config/deployments/sandbox.toml b/config/deployments/sandbox.toml
+index 813d6ba4816..658078c7246 100644
+--- a/config/deployments/sandbox.toml
++++ b/config/deployments/sandbox.toml
+@@ -714,7 +714,7 @@ credit = { currency = "INR,USD,GBP,EUR" }
+ debit = { currency = "INR,USD,GBP,EUR" }
+ 
+ [pm_filters.truelayer]
+-open_banking_uk = { currency = "GBP,EUR" }
++open_banking = { currency = "GBP,EUR" }
+ 
+ [payout_method_filters.truelayer]
+ open_banking_uk = { currency = "GBP,EUR,PLN" }
+diff --git a/config/development.toml b/config/development.toml
+index 07e20e96e67..bd7e56c8814 100644
+--- a/config/development.toml
++++ b/config/development.toml
+@@ -535,7 +535,7 @@ credit = { currency = "INR,USD,GBP,EUR" }
+ debit = { currency = "INR,USD,GBP,EUR" }
+ 
+ [pm_filters.truelayer]
+-open_banking_uk = { currency = "GBP,EUR" }
++open_banking = { currency = "GBP,EUR" }
+ 
+ [payout_method_filters.truelayer]
+ open_banking_uk = { currency = "GBP,EUR,PLN" }
+diff --git a/config/docker_compose.toml b/config/docker_compose.toml
+index 8d2107ca3b4..6e840fe5ebc 100644
+--- a/config/docker_compose.toml
++++ b/config/docker_compose.toml
+@@ -639,7 +639,7 @@ credit = { currency = "INR,USD,GBP,EUR" }
+ debit = { currency = "INR,USD,GBP,EUR" }
+ 
+ [pm_filters.truelayer]
+-open_banking_uk = { currency = "GBP,EUR" }
++open_banking = { currency = "GBP,EUR" }
+ 
+ [payout_method_filters.truelayer]
+ open_banking_uk = { currency = "GBP,EUR,PLN" }
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index 91a39247307..2419133323e 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -7861,7 +7861,7 @@ merchant_secret="Source verification key"
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer.metadata.kid]
+ name = "kid"
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index 6aa14800458..92aebbb5ce4 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -7334,7 +7334,7 @@ type = "Text"
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer.metadata.kid]
+ name = "kid"
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index fdf0869a61d..20ca4fc8a10 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -8253,7 +8253,7 @@ type = "Text"
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer.metadata.kid]
+ name = "kid"
+diff --git a/crates/hyperswitch_connectors/src/connectors/truelayer.rs b/crates/hyperswitch_connectors/src/connectors/truelayer.rs
+index d73553201b6..559cbf3e59f 100644
+--- a/crates/hyperswitch_connectors/src/connectors/truelayer.rs
++++ b/crates/hyperswitch_connectors/src/connectors/truelayer.rs
+@@ -1068,7 +1068,7 @@ static TRUELAYER_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> =
+         let mut truelayer_supported_payment_methods = SupportedPaymentMethods::new();
+         truelayer_supported_payment_methods.add(
+             enums::PaymentMethod::BankRedirect,
+-            enums::PaymentMethodType::OpenBankingUk,
++            enums::PaymentMethodType::OpenBanking,
+             PaymentMethodDetails {
+                 mandates: common_enums::FeatureStatus::NotSupported,
+                 refunds: common_enums::FeatureStatus::Supported,
+diff --git a/loadtest/config/development.toml b/loadtest/config/development.toml
+index e05274b8437..db40121de0c 100644
+--- a/loadtest/config/development.toml
++++ b/loadtest/config/development.toml
+@@ -452,7 +452,7 @@ credit = { currency = "INR,USD,GBP,EUR" }
+ debit = { currency = "INR,USD,GBP,EUR" }
+ 
+ [pm_filters.truelayer]
+-open_banking_uk = { currency = "GBP,EUR" }
++open_banking = { currency = "GBP,EUR" }
+ 
+ [payout_method_filters.truelayer]
+ open_banking_uk = { currency = "GBP,EUR,PLN" }
+
+From b9a24555e7083d53b7875448c0e0cf041a03fbda Mon Sep 17 00:00:00 2001
+From: Vani Gupta <vani.gupta@juspay.in>
+Date: Wed, 8 Apr 2026 10:48:12 +0530
+Subject: [PATCH 2/2] for cypress
+

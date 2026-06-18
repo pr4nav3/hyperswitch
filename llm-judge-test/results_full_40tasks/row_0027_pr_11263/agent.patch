@@ -1,0 +1,44 @@
+diff --git a/crates/hyperswitch_domain_models/src/vault.rs b/crates/hyperswitch_domain_models/src/vault.rs
+index 19ed9fb746..4c9ff359df 100644
+--- a/crates/hyperswitch_domain_models/src/vault.rs
++++ b/crates/hyperswitch_domain_models/src/vault.rs
+@@ -197,6 +197,17 @@ impl TryFrom<payment_methods::PaymentMethodCreateData> for PaymentMethodVaulting
+             ),
+         }
+     }
++    #[cfg(feature = "v2")]
++    pub fn for_fingerprint(&self) -> Self {
++        match self {
++            Self::Card(card) => Self::Card(payment_methods::CardDetail {
++                card_holder_name: None,
++                nick_name: None,
++                ..card.clone()
++            }),
++            other => other.clone(),
++        }
++    }
+ }
+ 
+ impl From<PaymentMethodVaultingData> for PaymentMethodCustomVaultingData {
+diff --git a/crates/router/src/core/payment_methods.rs b/crates/router/src/core/payment_methods.rs
+index 11cd3535e4..72925138d4 100644
+--- a/crates/router/src/core/payment_methods.rs
++++ b/crates/router/src/core/payment_methods.rs
+@@ -1310,7 +1310,7 @@ async fn create_or_fetch_payment_method_core(
+ 
+     let fingerprint_id = vault::get_fingerprint_id_from_vault(
+         state,
+-        &payment_method_data,
++        &payment_method_data.for_fingerprint(),
+         customer_id.get_string_repr().to_owned(),
+     )
+     .await
+@@ -4125,7 +4125,7 @@ pub async fn update_payment_method_core(
+                 Some(ref vault_request_data_req) => {
+                     let fingerprint_id_from_vault = vault::get_fingerprint_id_from_vault(
+                         state,
+-                        vault_request_data_req,
++                        &vault_request_data_req.for_fingerprint(),
+                         payment_method
+                             .customer_id
+                             .clone()

@@ -1,0 +1,42 @@
+diff --git a/crates/router/src/core/payments/tokenization.rs b/crates/router/src/core/payments/tokenization.rs
+index 9a9e7d870a..da14fca1a4 100644
+--- a/crates/router/src/core/payments/tokenization.rs
++++ b/crates/router/src/core/payments/tokenization.rs
+@@ -294,15 +294,31 @@ where
+                     (
+                         _,
+                         domain::PaymentMethodData::Wallet(domain::WalletData::ApplePay(applepay)),
+-                    ) => Some(PaymentMethodsData::WalletDetails(
+-                        PaymentMethodDataWalletInfo::from(applepay),
+-                    )),
++                    ) => {
++                        let mut wallet_info = PaymentMethodDataWalletInfo::from(applepay);
++                        if let Some(token) = &save_payment_method_data.payment_method_token {
++                            if let types::PaymentMethodToken::ApplePayDecrypt(decrypted) = token {
++                                wallet_info.card_exp_month =
++                                    Some(decrypted.application_expiration_month.clone());
++                                wallet_info.card_exp_year =
++                                    Some(decrypted.application_expiration_year.clone());
++                            }
++                        }
++                        Some(PaymentMethodsData::WalletDetails(wallet_info))
++                    }
+                     (
+                         _,
+                         domain::PaymentMethodData::Wallet(domain::WalletData::GooglePay(googlepay)),
+-                    ) => Some(PaymentMethodsData::WalletDetails(
+-                        PaymentMethodDataWalletInfo::from(googlepay),
+-                    )),
++                    ) => {
++                        let mut wallet_info = PaymentMethodDataWalletInfo::from(googlepay);
++                        if let Some(token) = &save_payment_method_data.payment_method_token {
++                            if let types::PaymentMethodToken::GooglePayDecrypt(decrypted) = token {
++                                wallet_info.card_exp_month = Some(decrypted.card_exp_month.clone());
++                                wallet_info.card_exp_year = Some(decrypted.card_exp_year.clone());
++                            }
++                        }
++                        Some(PaymentMethodsData::WalletDetails(wallet_info))
++                    }
+                     _ => None,
+                 };
+ 

@@ -1,0 +1,333 @@
+[
+  {
+    "type": "step_start",
+    "timestamp": 1781735858466,
+    "sessionID": "ses_128455f3cffeOdXjkFODoWsEDK",
+    "part": {
+      "id": "prt_ed7bba11f001Hax195Lb8wf6R0",
+      "messageID": "msg_ed7baa1610011Rk3IKVpPMY4HO",
+      "sessionID": "ses_128455f3cffeOdXjkFODoWsEDK",
+      "snapshot": "302f5e8c9a1a75a44d2bff21f481ca23578b566b",
+      "type": "step-start"
+    },
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  },
+  {
+    "type": "tool_use",
+    "timestamp": 1781736021206,
+    "sessionID": "ses_128455f4effe6vsYdeYbSCQrZx",
+    "part": {
+      "type": "tool",
+      "tool": "grep",
+      "callID": "chatcmpl-tool-aaf3e1288e98d364",
+      "state": {
+        "status": "completed",
+        "input": {
+          "pattern": "is_pre_processing_required_before_authorize",
+          "output_mode": "files_with_matches"
+        },
+        "output": "Found 2 match(es) in 2 file(s)\n\n/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/judge_01_row_0038_pr_9947/crates/router/src/core/payments.rs\n\n/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/judge_01_row_0038_pr_9947/crates/common_enums/src/connector_enums.rs\n\n[Agent Usage Reminder]\n\nYou called a search/fetch tool directly without leveraging specialized agents.\n\nRECOMMENDED: Use task with explore/librarian agents for better results:\n\n```\n// Parallel exploration - fire multiple agents simultaneously\ntask(subagent_type=\"explore\", load_skills=[], prompt=\"Find all files matching pattern X\")\ntask(subagent_type=\"explore\", load_skills=[], prompt=\"Search for implementation of Y\")\ntask(subagent_type=\"librarian\", load_skills=[], prompt=\"Lookup documentation for Z\")\n\n// Then continue your work while they run in background\n// System will notify you when each completes\n```\n\nWHY:\n- Agents can perform deeper, more thorough searches\n- Background tasks run in parallel, saving time\n- Specialized agents have domain expertise\n- Reduces context window usage in main session\n\nALWAYS prefer: Multiple parallel task calls > Direct tool calls\n",
+        "metadata": {
+          "truncated": false
+        },
+        "title": "",
+        "time": {
+          "start": 1781736020718,
+          "end": 1781736021205
+        }
+      },
+      "id": "prt_ed7be19c2001j5Zbga5wvgRmFc",
+      "sessionID": "ses_128455f4effe6vsYdeYbSCQrZx",
+      "messageID": "msg_ed7baa1520010hRzGyaTKViVxL"
+    },
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  },
+  {
+    "reasoning": "The agent patch attempts to fix the missing Airwallex intent identifier by manually invoking preprocessing_steps before create_order_at_connector in crates/router/src/core/payments.rs, extracting a ConnectorTransactionId, and storing it in router_data.reference_id. While this populates the field the legacy Airwallex authorize connector consumes, it completely sidesteps the task's core requirement to migrate Airwallex to the platform's standard create_order_at_connector flow. The reference patch achieves this by implementing PaymentsCreateOrder for Airwallex, adding it to requires_order_creation_before_payment, and updating the authorize URL to use request.get_order_id(). The agent does none of this, leaving the legacy is_pre_processing_required_before_authorize check intact and failing to implement the standard order creation trait. Because the agent did not remove the existing early-return preprocessing logic in complete_preprocessing_steps_if_required (which the reference patch removes), the authorize flow will later call preprocessing_steps a second time inside authorize_preprocessing_steps, creating a duplicate upstream payment intent and wasting the first one. This is a definite runtime logic bug. Furthermore, the agent duplicates the same manual preprocessing extraction block in two locations inside payments.rs, violating DRY and making maintenance harder. It also manually destructures TransactionResponse and ConnectorTransactionId instead of leveraging standard CreateOrder response types, which is fragile. The patch is hygienic in scope (only one file changed) and compiles successfully, but the duplicated blocks and incorrect architectural approach significantly reduce correctness and completeness.",
+    "correctness": 3.0,
+    "completeness": 3.0,
+    "convention_adherence": 5.0,
+    "hygiene": 7.0,
+    "overall": 4.0,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Duplicate intent creation caused by calling preprocessing_steps in main flow and again in authorize_preprocessing_steps",
+        "evidence": "Agent inserts manual preprocessing_steps call before create_order_at_connector, but does not remove the existing early-return preprocessing logic in complete_preprocessing_steps_if_required that authorize_preprocessing_steps invokes later."
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Migrate Airwallex to standard create_order_at_connector flow",
+        "evidence": "Agent did not add Airwallex to requires_order_creation_before_payment, did not implement PaymentsCreateOrder for Airwallex, and did not update the authorize URL from reference_id to get_order_id()."
+      },
+      {
+        "requirement": "Remove legacy is_pre_processing_required_before_authorize specialization for Airwallex",
+        "evidence": "Agent left the is_pre_processing_required_before_authorize method unchanged; reference patch removes it."
+      },
+      {
+        "requirement": "Add CreateOrder trait implementation and related transformer/response types for Airwallex",
+        "evidence": "Agent made no changes to crates/hyperswitch_connectors/src/connectors/airwallex.rs or transformers.rs."
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "DRY violation: duplicated preprocessing extraction block",
+        "evidence": "Identical ~25-line preprocessing result extraction block is copy-pasted at two locations in crates/router/src/core/payments.rs (~line 4451 and ~line 4828)."
+      },
+      {
+        "convention": "Fragile manual response destructuring instead of standard type conversion",
+        "evidence": "Agent manually matches PaymentsResponseData::TransactionResponse and ResponseId::ConnectorTransactionId to extract an ID, rather than implementing the standard CreateOrder connector integration and letting the platform populate order_id."
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  },
+  {
+    "reasoning": "The agent attempts to fix Airwallex v2 card payment failures by extracting a payment intent identifier from the preprocessing response and injecting it into router_data.reference_id before the authorize call. Cargo check passes cleanly. However, the agent's approach differs significantly from the reference solution: instead of moving Airwallex to the standard CreateOrder flow (as the task explicitly requests), it keeps the legacy is_pre_processing_required_before_authorize special-case and layers additional preprocessing calls into payments.rs. This risks double-processing because the existing complete_preprocessing_steps_if_required calls at lines 4001 and 5297 remain untouched. The agent also never modifies the Airwallex connector, never adds Airwallex+Card to requires_order_creation_before_payment, and never updates the connector's authorize URL construction. The core logic of extracting reference_id is sound in isolation, but it is a workaround rather than the requested architectural fix.",
+    "correctness": 6.0,
+    "completeness": 5.0,
+    "convention_adherence": 8.0,
+    "hygiene": 9.0,
+    "overall": 6.55,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Potential double-preprocessing: the agent adds new preprocessing invocations around lines 4455 and 4830 without removing the existing complete_preprocessing_steps_if_required calls at lines 4001 and 5297. If these code paths are executed sequentially for Airwallex, two payment intents will be created upstream.",
+        "evidence": "Agent patch adds preprocessing_steps(state, &connector).await at ~4455 and ~4830, while existing complete_preprocessing_steps_if_required at 4001 and 5297 are left intact."
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Fragile reference_id extraction: the agent pattern-matches on PaymentsResponseData::TransactionResponse to extract the connector transaction ID. If the preprocessing integration returns any other variant (e.g., PreProcessingResponse), reference_id silently remains None and the subsequent authorize call will fail with MissingConnectorTransactionID.",
+        "evidence": "if let Ok(router_types::PaymentsResponseData::TransactionResponse { resource_id, .. }) = &preprocessing_router_data.response"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Use the platform's standard CreateOrder flow for transaction setup",
+        "evidence": "The task states 'The Airwallex connector should participate in the platform's standard flow for setting up a transaction before authorization.' The reference patch implements ConnectorIntegration<CreateOrder, ...> for Airwallex and adds (Self::Airwallex, PaymentMethod::Card) to requires_order_creation_before_payment. The agent does neither."
+      },
+      {
+        "requirement": "Modify the Airwallex connector integration",
+        "evidence": "The agent does not touch crates/hyperswitch_connectors/src/connectors/airwallex.rs or its transformers. The reference patch removes the PreProcessing integration, adds a CreateOrder integration, introduces AirwallexOrderRequest/AirwallexOrderResponse types, and changes the authorize URL from req.reference_id to req.request.get_order_id()?. None of these connector-level changes are present in the agent patch."
+      },
+      {
+        "requirement": "Clean up special-case preprocessing handling",
+        "evidence": "The reference patch removes is_pre_processing_required_before_authorize entirely and deletes the Airwallex-specific reference_id copying in authorize_preprocessing_steps. The agent leaves both intact, perpetuating connector-specific special-casing instead of standardizing on the CreateOrder flow."
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  },
+  {
+    "reasoning": "The agent's patch modifies only `crates/router/src/core/payments.rs` (two locations), whereas the reference patch touches 9 files across the connector implementation, domain models, enums, and flow handlers. The task explicitly requires integrating Airwallex into the platform's standard setup flow (`requires_order_creation_before_payment` + `PaymentsCreateOrder`), but the agent instead inserts a workaround that calls the existing non-standard `PreProcessing` step before `create_order_at_connector` and manually extracts a `reference_id`. While the agent correctly identifies that Airwallex PreProcessing returns `PaymentsResponseData::TransactionResponse` with `ConnectorTransactionId`, this is ultimately a dead-end approach: (1) the existing `authorize_preprocessing_steps` in `authorize_flow.rs` already propagates `resp.reference_id` for Airwallex (lines 712-713), making the agent's extraction redundant; (2) `complete_preprocessing_steps_if_required` (line 6720) already calls preprocessing for Airwallex and returns early, so the agent adds a third preprocessing invocation that either duplicates work or conflicts with the existing early-return logic; (3) the agent never adds Airwallex to `requires_order_creation_before_payment`, never implements `PaymentsCreateOrder` for Airwallex, and never updates the connector's authorize URL to use `get_order_id()`—all central to the reference solution. Cargo check passes (environmental rustfmt failure only). The agent introduces connector-specific branching (`is_pre_processing_required_before_authorize`) in generic orchestration code, which the reference specifically removes as an anti-pattern.",
+    "correctness": 3.0,
+    "completeness": 2.0,
+    "convention_adherence": 4.0,
+    "hygiene": 7.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Calls preprocessing_steps before create_order_at_connector, but complete_preprocessing_steps_if_required (line 6720) already invokes preprocessing for Airwallex and returns early; authorize_preprocessing_steps (authorize_flow.rs:332) also invokes it. This creates a third redundant preprocessing call.",
+        "evidence": "Agent adds `router_data.preprocessing_steps(state, &connector).await` at lines 4460 and 4866, but existing `complete_preprocessing_steps_if_required` at line 6723 already covers Airwallex."
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Sets router_data.reference_id from preprocessing, but authorize_flow.rs:712-713 already copies resp.reference_id for Airwallex. The real issue is architectural (non-standard flow), not missing reference_id propagation.",
+        "evidence": "`authorize_router_data.reference_id = resp.reference_id;` already exists in authorize_flow.rs"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Integrate Airwallex into standard CreateOrder flow (requires_order_creation_before_payment)",
+        "evidence": "Agent never modifies `crates/common_enums/src/connector_enums.rs` to add Airwallex to `requires_order_creation_before_payment`; reference does."
+      },
+      {
+        "requirement": "Implement PaymentsCreateOrder trait for Airwallex connector",
+        "evidence": "Agent never modifies `crates/hyperswitch_connectors/src/connectors/airwallex.rs` or `transformers.rs`; reference converts PreProcessing integration into CreateOrder integration."
+      },
+      {
+        "requirement": "Update CreateOrderRequestData with payment_method_data and order_details",
+        "evidence": "Agent never modifies `crates/hyperswitch_domain_models/src/router_request_types.rs`; reference adds these fields."
+      },
+      {
+        "requirement": "Update authorize_flow and external_proxy_flow to propagate order_id / reference_id through CreateOrderResult",
+        "evidence": "Agent never modifies `crates/router/src/core/payments/flows/authorize_flow.rs` or `external_proxy_flow.rs`; reference updates both."
+      },
+      {
+        "requirement": "Remove connector-specific is_pre_processing_required_before_authorize anti-pattern",
+        "evidence": "Agent still uses `connector.connector_name.is_pre_processing_required_before_authorize()`; reference removes this method entirely."
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "Avoid connector-specific branching in generic orchestration code",
+        "evidence": "Agent introduces `if connector.connector_name.is_pre_processing_required_before_authorize()` in `crates/router/src/core/payments.rs` generic payment flow; Hyperswitch prefers trait-based standard flows (CreateOrder) over connector conditionals in core orchestration."
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent patch only modifies `crates/router/src/core/payments.rs` and attempts to fix the Airwallex intent propagation by injecting `preprocessing_steps` before `create_order_at_connector` in two functions. However, the task explicitly requires moving Airwallex to the platform's standard `CreateOrder` flow. The reference patch implements a custom `CreateOrder` integration for Airwallex, adds Airwallex card payments to `requires_order_creation_before_payment`, updates request types, and propagates the order ID through the authorize/external-proxy flows. The agent does none of this. Instead, it keeps the legacy `is_pre_processing_required_before_authorize` hook and manually extracts a transaction ID from the preprocessing response. This extraction is fragile: it expects `PaymentsResponseData::TransactionResponse`, but Airwallex preprocessing likely does not return that variant (the reference patch shows the old response was `AirwallexPaymentsResponse`). More importantly, the agent sets `router_data.reference_id = preprocessing_reference_id` where `preprocessing_reference_id` defaults to `None`; if the connector already populated `reference_id` on the returned router data, this overwrites it with `None`, losing the intent ID. Finally, the same 30-line block is duplicated verbatim in two functions, violating DRY principles. The code compiles (cargo check passed), but the logic does not match the required architectural shift and contains a likely reference-id-clobbering bug.",
+    "correctness": 3.0,
+    "completeness": 3.0,
+    "convention_adherence": 5.0,
+    "hygiene": 6.0,
+    "overall": 3.85,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Overwrites router_data.reference_id with potentially None, destroying any connector-set value",
+        "evidence": "let mut preprocessing_reference_id = None; ... router_data.reference_id = preprocessing_reference_id;"
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Expects TransactionResponse variant from preprocessing, but Airwallex preprocessing likely returns a different response type",
+        "evidence": "if let Ok(router_types::PaymentsResponseData::TransactionResponse { resource_id, .. }) = &preprocessing_router_data.response"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Implement CreateOrder trait for Airwallex connector",
+        "evidence": "Agent did not modify crates/hyperswitch_connectors/src/connectors/airwallex.rs"
+      },
+      {
+        "requirement": "Add Airwallex Card to requires_order_creation_before_payment",
+        "evidence": "Agent did not modify crates/common_enums/src/connector_enums.rs"
+      },
+      {
+        "requirement": "Update CreateOrderRequestData to carry payment_method_data and order_details",
+        "evidence": "Agent did not modify crates/hyperswitch_domain_models/src/router_request_types.rs"
+      },
+      {
+        "requirement": "Propagate order_id/reference_id in authorize and external_proxy flows",
+        "evidence": "Agent did not modify crates/router/src/core/payments/flows/authorize_flow.rs or external_proxy_flow.rs"
+      },
+      {
+        "requirement": "Migrate Airwallex away from legacy is_pre_processing_required_before_authorize hook to standard CreateOrder flow",
+        "evidence": "Agent still uses is_pre_processing_required_before_authorize() in payments.rs"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "DRY / code duplication",
+        "evidence": "Identical ~30-line preprocessing block duplicated in two functions inside crates/router/src/core/payments.rs"
+      },
+      {
+        "convention": "Use standard connector flows instead of manual preprocessing injection",
+        "evidence": "Agent injects manual preprocessing before create_order instead of implementing the proper CreateOrder connector trait"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  },
+  {
+    "reasoning": "The agent patch compiles successfully and functionally resolves the Airwallex card payment authorization failure by running the connector's preprocessing step (which creates the payment intent) inline before `create_order_at_connector`, then extracting the intent identifier and assigning it to `router_data.reference_id` so the subsequent authorize/confirm request can construct the correct URL. However, the task explicitly requires Airwallex to 'participate in the platform's standard flow for setting up a transaction before authorization.' The reference patch achieves this by converting Airwallex from the legacy `PreProcessing` flow to the standard `CreateOrder` flow—adding it to `requires_order_creation_before_payment`, implementing `PaymentsCreateOrder`, updating request/response types, and letting `create_order_at_connector` handle intent creation through the standard mechanism. The agent bypasses this entirely, opting for inline special-casing in `payments.rs` instead of integrating with the standard connector abstraction. Additionally, the agent redundantly extracts the transaction ID from the preprocessing response when the Airwallex transformer already populates `reference_id`, introduces duplicated logic across two v2 functions (`call_connector_service` and `connector_service_decider`), and removes session-token handling that existed near the original preprocessing call sites.",
+    "correctness": 6.0,
+    "completeness": 5.0,
+    "convention_adherence": 6.0,
+    "hygiene": 9.0,
+    "overall": 6.15,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Redundant extraction of connector_transaction_id from preprocessing response",
+        "evidence": "let mut preprocessing_reference_id = None; ... router_data.reference_id = preprocessing_reference_id;"
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Overwrites router_data.reference_id with None if preprocessing returns non-TransactionResponse variant",
+        "evidence": "router_data.reference_id = preprocessing_reference_id;"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Airwallex should participate in standard CreateOrder flow instead of legacy PreProcessing",
+        "evidence": "Agent kept Airwallex in is_pre_processing_required_before_authorize and did not implement PaymentsCreateOrder for Airwallex"
+      },
+      {
+        "requirement": "Update connector enums to require order creation for Airwallex Card payments",
+        "evidence": "requires_order_creation_before_payment was not updated in connector_enums.rs"
+      },
+      {
+        "requirement": "Update Airwallex connector implementation to use CreateOrder types",
+        "evidence": "Airwallex still implements PaymentsPreProcessing with PaymentsPreProcessingData instead of PaymentsCreateOrder with CreateOrderRequestData"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "Inline special-casing instead of using standard complete_preprocessing_steps_if_required or CreateOrder abstractions",
+        "evidence": "if connector.connector_name.is_pre_processing_required_before_authorize() { ... preprocessing_steps ... }"
+      },
+      {
+        "convention": "Duplicated preprocessing logic in two locations",
+        "evidence": "Same block appears in call_connector_service (~l.4455) and connector_service_decider (~l.4861)"
+      },
+      {
+        "convention": "Verbose match instead of idiomatic ? operator for error propagation",
+        "evidence": "match preprocessing_result { Ok(...) => ..., Err(err) => return Err(err) }"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  },
+  {
+    "reasoning": "The agent's patch fundamentally misunderstands the architectural requirement. The task explicitly requires Airwallex to \"participate in the platform's standard flow for setting up a transaction before authorization\" — which is the CreateOrder flow (requires_order_creation_before_payment + CreateOrder connector integration). The reference patch achieves this by: (1) adding Airwallex+Card to requires_order_creation_before_payment, (2) implementing PaymentsCreateOrder for Airwallex instead of PreProcessing, (3) adding payment_method_data and order_details to CreateOrderRequestData, (4) removing the deprecated is_pre_processing_required_before_authorize method, and (5) updating flow files to propagate order_id/reference_id. The agent instead added manual preprocessing calls to crates/router/src/core/payments.rs, manually extracting reference_id from TransactionResponse and setting it on router_data. This is redundant because preprocessing_steps already sets reference_id on the returned RouterData (visible in authorize_preprocessing_steps line 712). The agent's approach preserves the deprecated PreProcessing flow instead of migrating to CreateOrder, and makes no connector-level changes whatsoever. The compilation passed (cargo check rc=0), but the rustfmt failure is purely environmental.",
+    "correctness": 4.0,
+    "completeness": 3.0,
+    "convention_adherence": 5.0,
+    "hygiene": 6.0,
+    "overall": 4.2,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Manual extraction of reference_id from TransactionResponse is redundant and fragile - preprocessing_steps already sets reference_id on the returned RouterData",
+        "evidence": "let mut preprocessing_reference_id = None; if let Ok(router_types::PaymentsResponseData::TransactionResponse { resource_id, .. }) = &preprocessing_router_data.response { if let router_types::ResponseId::ConnectorTransactionId(id) = resource_id { preprocessing_reference_id = Some(id.clone()); } } router_data.reference_id = preprocessing_reference_id;"
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Adds preprocessing logic that duplicates existing complete_preprocessing_steps_if_required abstraction without using it",
+        "evidence": "if connector.connector_name.is_pre_processing_required_before_authorize() { let preprocessing_result = router_data.preprocessing_steps(state, &connector).await; ... router_data.reference_id = preprocessing_reference_id; }"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Migrate Airwallex from PreProcessing to standard CreateOrder flow",
+        "evidence": "Agent did not modify connector_enums.rs to add Airwallex to requires_order_creation_before_payment, did not implement PaymentsCreateOrder for Airwallex, and did not update CreateOrderRequestData"
+      },
+      {
+        "requirement": "Remove deprecated is_pre_processing_required_before_authorize method",
+        "evidence": "Agent kept using is_pre_processing_required_before_authorize() instead of removing it per reference patch"
+      },
+      {
+        "requirement": "Update Airwallex connector to implement CreateOrder instead of PreProcessing",
+        "evidence": "Agent made no changes to crates/hyperswitch_connectors/src/connectors/airwallex.rs or transformers.rs"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "Bypasses existing complete_preprocessing_steps_if_required abstraction in favor of inline manual preprocessing",
+        "evidence": "The v1 flow already uses complete_preprocessing_steps_if_required which properly handles preprocessing for all connectors including Airwallex. The agent should have used this existing abstraction or migrated to the CreateOrder flow."
+      },
+      {
+        "convention": "Manual response payload extraction instead of using standard RouterData.reference_id field",
+        "evidence": "Manually matching on PaymentsResponseData::TransactionResponse to extract ConnectorTransactionId instead of using the reference_id field already populated by the connector's handle_response transformation."
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  }
+]

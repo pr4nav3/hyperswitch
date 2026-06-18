@@ -1,0 +1,168 @@
+From f3d91e0ec573e6247a915cbac8c6e38e68e9185c Mon Sep 17 00:00:00 2001
+From: Vani Gupta <vani.gupta@juspay.in>
+Date: Fri, 17 Oct 2025 18:06:28 +0530
+Subject: [PATCH 1/4] fix-wasm
+
+---
+ crates/connector_configs/toml/development.toml | 7 +++++++
+ crates/connector_configs/toml/production.toml  | 7 +++++++
+ crates/connector_configs/toml/sandbox.toml     | 7 +++++++
+ 3 files changed, 21 insertions(+)
+
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index 9d58e064f25..f2380cb96a8 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -7397,6 +7397,13 @@ payment_method_type = "Maestro"
+   required = true
+   type = "Select"
+   options = []
++[[finix.metadata.apple_pay]]
++  name="payment_processing_details_at"
++  label="Payment Processing Details At"
++  placeholder="Enter Payment Processing Details At"
++  required=true
++  type="Radio"
++  options=["Connector"]
+ [[finix.metadata.google_pay]]
+   name = "merchant_name"
+   label = "Google Pay Merchant Name"
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index a1ee07c9ec5..91b3f09b721 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -6133,6 +6133,13 @@ payment_method_type = "Maestro"
+   required = true
+   type = "Select"
+   options = []
++[[finix.metadata.apple_pay]]
++  name="payment_processing_details_at"
++  label="Payment Processing Details At"
++  placeholder="Enter Payment Processing Details At"
++  required=true
++  type="Radio"
++  options=["Connector"]
+ [[finix.metadata.google_pay]]
+   name = "merchant_name"
+   label = "Google Pay Merchant Name"
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index 1d270397023..ef1b8dd93f8 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -7372,6 +7372,13 @@ payment_method_type = "Maestro"
+   required = true
+   type = "Select"
+   options = []
++[[finix.metadata.apple_pay]]
++  name="payment_processing_details_at"
++  label="Payment Processing Details At"
++  placeholder="Enter Payment Processing Details At"
++  required=true
++  type="Radio"
++  options=["Connector"]
+ [[finix.metadata.google_pay]]
+   name = "merchant_name"
+   label = "Google Pay Merchant Name"
+
+From 7fee67bb1a9647fc96237530b0f3c42be98fdd21 Mon Sep 17 00:00:00 2001
+From: Vani Gupta <vani.gupta@juspay.in>
+Date: Mon, 27 Oct 2025 15:33:56 +0530
+Subject: [PATCH 2/4] remove 3ds check for wallets
+
+---
+ .../src/connectors/finix/transformers.rs       | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+index c8502940c29..b3b34c70b2a 100644
+--- a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+@@ -132,17 +132,17 @@ impl TryFrom<&FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResp
+     fn try_from(
+         item: &FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResponseData>,
+     ) -> Result<Self, Self::Error> {
+-        if matches!(
+-            item.router_data.auth_type,
+-            enums::AuthenticationType::ThreeDs
+-        ) {
+-            return Err(ConnectorError::NotImplemented(
+-                get_unimplemented_payment_method_error_message("finix"),
+-            )
+-            .into());
+-        }
+         match item.router_data.request.payment_method_data.clone() {
+             PaymentMethodData::Card(_) => {
++                if matches!(
++                    item.router_data.auth_type,
++                    enums::AuthenticationType::ThreeDs
++                ) {
++                    return Err(ConnectorError::NotImplemented(
++                        get_unimplemented_payment_method_error_message("finix"),
++                    )
++                    .into());
++                }
+                 let source = item.router_data.get_payment_method_token()?;
+                 Ok(Self {
+                     amount: item.amount,
+
+From a324d7775304b9b6dfc9d5d53fa9f9150bcf53bc Mon Sep 17 00:00:00 2001
+From: Vani Gupta <vani.gupta@juspay.in>
+Date: Mon, 27 Oct 2025 15:57:33 +0530
+Subject: [PATCH 3/4] fix
+
+---
+ .../hyperswitch_connectors/src/connectors/finix/transformers.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+index 4c3e85d4d1b..b335cb6d490 100644
+--- a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+@@ -133,7 +133,7 @@ impl TryFrom<&FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResp
+     fn try_from(
+         item: &FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResponseData>,
+     ) -> Result<Self, Self::Error> {
+-        if matches!(payment_method_data, PaymentMethodData::Card(_))
++        if matches!(item.router_data.request.payment_method_data, PaymentMethodData::Card(_))
+             && matches!(item.router_data.auth_type, enums::AuthenticationType::ThreeDs)
+         {
+             return Err(ConnectorError::NotImplemented(
+
+From 8e770f0c793f0daa9af99555753b339f894d363d Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Mon, 27 Oct 2025 10:30:28 +0000
+Subject: [PATCH 4/4] chore: run formatter
+
+---
+ .../src/connectors/finix/transformers.rs             | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+index b335cb6d490..0542011dba1 100644
+--- a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+@@ -133,15 +133,19 @@ impl TryFrom<&FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResp
+     fn try_from(
+         item: &FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResponseData>,
+     ) -> Result<Self, Self::Error> {
+-        if matches!(item.router_data.request.payment_method_data, PaymentMethodData::Card(_))
+-            && matches!(item.router_data.auth_type, enums::AuthenticationType::ThreeDs)
+-        {
++        if matches!(
++            item.router_data.request.payment_method_data,
++            PaymentMethodData::Card(_)
++        ) && matches!(
++            item.router_data.auth_type,
++            enums::AuthenticationType::ThreeDs
++        ) {
+             return Err(ConnectorError::NotImplemented(
+                 get_unimplemented_payment_method_error_message("finix"),
+             )
+             .into());
+         }
+-        
++
+         let source =
+             match item.router_data.request.payment_method_data.clone() {
+                 PaymentMethodData::Card(_)

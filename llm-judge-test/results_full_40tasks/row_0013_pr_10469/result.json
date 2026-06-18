@@ -1,0 +1,140 @@
+{
+  "row_index": 13,
+  "repo": "juspay/hyperswitch",
+  "pr_number": "10469",
+  "base_sha": "0aefd0706fba184bb8d36f59c51c8f3bae6e6da2",
+  "head_sha": "9e91a7ed1c4c30ed28d6aca037e636992606fee0",
+  "model": "litellm/open-large",
+  "status": "ok",
+  "output_dir": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/results_full_40tasks/row_0013_pr_10469",
+  "worktree": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0013_pr_10469",
+  "agent_attempts": 2,
+  "agent_empty_patch_retries": 1,
+  "agent_returncode": 0,
+  "agent_elapsed_seconds": 582.24,
+  "has_patch": true,
+  "num_changed_files": 9,
+  "changed_files": [
+    "api-reference/v1/openapi_spec_v1.json",
+    "crates/api_models/src/payments.rs",
+    "crates/hyperswitch_interfaces/src/consts.rs",
+    "crates/router/src/core/payments/transformers.rs",
+    "crates/router/src/db/events.rs",
+    "crates/router/tests/payments.rs",
+    "crates/router/tests/payments2.rs",
+    "cypress-tests/cypress/e2e/configs/Payment/Cybersource.js",
+    "cypress-tests/cypress/e2e/configs/Payment/Stripe.js"
+  ],
+  "file_f1": 1.0,
+  "file_recall": 1.0,
+  "added_line_f1": 1.0,
+  "removed_line_f1": 1.0,
+  "style_score": 10.0,
+  "compilation_summary": {
+    "passed": 1,
+    "total": 2,
+    "all_passed": false
+  },
+  "review_available": true,
+  "judge_count": 8,
+  "judge_aggregate": {
+    "judge_count": 8,
+    "valid_judges": 8,
+    "raw_scores": {
+      "correctness": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "completeness": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "convention_adherence": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "hygiene": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "overall": [
+        10.0,
+        10.0,
+        10.0,
+        6.5,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ]
+    },
+    "mean": {
+      "correctness": 10.0,
+      "completeness": 10.0,
+      "convention_adherence": 10.0,
+      "hygiene": 10.0,
+      "overall": 9.562
+    },
+    "std_dev": {
+      "correctness": 0.0,
+      "completeness": 0.0,
+      "convention_adherence": 0.0,
+      "hygiene": 0.0,
+      "overall": 1.237
+    },
+    "median": {
+      "correctness": 10.0,
+      "completeness": 10.0,
+      "convention_adherence": 10.0,
+      "hygiene": 10.0,
+      "overall": 10.0
+    },
+    "outliers_excluded": {
+      "correctness": [],
+      "completeness": [],
+      "convention_adherence": [],
+      "hygiene": [],
+      "overall": [
+        4
+      ]
+    },
+    "outlier_explanations": {
+      "correctness": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [10.0, 10.0].",
+      "completeness": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [10.0, 10.0].",
+      "convention_adherence": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [10.0, 10.0].",
+      "hygiene": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [10.0, 10.0].",
+      "overall": "Excluded 1 outlier(s): judge 4 scored 6.5 (low). Bounds: [10.0, 10.0] computed from IQR with multiplier 1.5."
+    },
+    "final_score": {
+      "correctness": 10.0,
+      "completeness": 10.0,
+      "convention_adherence": 10.0,
+      "hygiene": 10.0,
+      "overall": 10.0
+    }
+  },
+  "elapsed_seconds": 1373.32
+}

@@ -1,0 +1,367 @@
+[
+  {
+    "reasoning": "The agent patch upgraded 5 connectors (boku, phonepe, santander, square, stripebilling) from Alpha/Beta to Live. These are mechanically correct enum variant swaps that compile cleanly. However, the agent completely missed all 10 connectors identified in the reference patch: 6 that needed upgrading (amazonpay, calida, gigadat, loonio, nuvei, peachpayments) and 4 that needed downgrading (aci, finix, payload, dwolla). There is zero overlap between the agent's changes and the reference patch. The senior reviewer found the agent's individual upgrades 'plausible' but unverifiable without product documentation, and noted the approach is 'incomplete' because a full audit should catch both understated and overstated maturity levels. The changes exhibit perfect convention adherence and hygiene—each is a single-line surgical change with no side effects. Overall, the agent addressed roughly 5 out of ~15 connectors needing corrections (~33%), earning a low completeness score despite flawless execution on the subset it did touch.",
+    "correctness": 5.0,
+    "completeness": 3.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 6.15,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade aci from Beta to Sandbox",
+        "evidence": "Reference patch changed aci.rs:1174 from Beta to Sandbox; agent did not modify aci.rs"
+      },
+      {
+        "requirement": "Upgrade amazonpay from Alpha to Beta",
+        "evidence": "Reference patch changed amazonpay.rs:770 from Alpha to Beta; agent did not modify amazonpay.rs"
+      },
+      {
+        "requirement": "Upgrade calida from Sandbox to Live",
+        "evidence": "Reference patch changed calida.rs:747 from Sandbox to Live; agent did not modify calida.rs"
+      },
+      {
+        "requirement": "Downgrade finix from Alpha to Sandbox",
+        "evidence": "Reference patch changed finix.rs:1087 from Alpha to Sandbox; agent did not modify finix.rs"
+      },
+      {
+        "requirement": "Upgrade gigadat from Sandbox to Live",
+        "evidence": "Reference patch changed gigadat.rs:1070 from Sandbox to Live; agent did not modify gigadat.rs"
+      },
+      {
+        "requirement": "Upgrade loonio from Sandbox to Live",
+        "evidence": "Reference patch changed loonio.rs:849 from Sandbox to Live; agent did not modify loonio.rs"
+      },
+      {
+        "requirement": "Upgrade nuvei from Beta to Live",
+        "evidence": "Reference patch changed nuvei.rs:1570 from Beta to Live; agent did not modify nuvei.rs"
+      },
+      {
+        "requirement": "Upgrade peachpayments from Beta to Live",
+        "evidence": "Reference patch changed peachpayments.rs:823 from Beta to Live; agent did not modify peachpayments.rs"
+      },
+      {
+        "requirement": "Downgrade payload from Alpha to Sandbox",
+        "evidence": "Reference patch changed payload.rs:932 from Alpha to Sandbox; agent did not modify payload.rs"
+      },
+      {
+        "requirement": "Downgrade dwolla from Beta to Sandbox",
+        "evidence": "Reference patch changed dwolla.rs:987 from Beta to Sandbox; agent did not modify dwolla.rs"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  },
+  {
+    "reasoning": "The agent performed a partial audit of connector maturity levels, upgrading five connectors (boku, phonepe, santander, square, stripebilling) from Alpha/Beta to Live. These changes compile cleanly and follow the minimal-diff pattern established in the codebase. However, the agent's audit was incomplete: it modified a completely disjoint set of connectors from the reference patch and failed to address any of the ten connectors the reference identified as needing corrections. Specifically, the agent missed four connectors that were overstating readiness (aci Beta→Sandbox, finix Alpha→Sandbox, payload Alpha→Sandbox, dwolla Beta→Sandbox) and six connectors that were understating readiness (amazonpay Alpha→Beta, calida Sandbox→Live, gigadat Sandbox→Live, loonio Sandbox→Live, nuvei Beta→Live, peachpayments Beta→Live). While the agent's five upgrades are plausible given the implementation depth in those files, they represent at best one-third of the total corrections needed. There are no runtime logic bugs or convention violations in the changes that were made.",
+    "correctness": 7.0,
+    "completeness": 4.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 7.15,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade connectors overstating readiness: aci (Beta→Sandbox), finix (Alpha→Sandbox), payload (Alpha→Sandbox), dwolla (Beta→Sandbox)",
+        "evidence": "Reference patch modifies these four connectors; agent patch touches none of them"
+      },
+      {
+        "requirement": "Upgrade connectors understating readiness: amazonpay (Alpha→Beta), calida (Sandbox→Live), gigadat (Sandbox→Live), loonio (Sandbox→Live), nuvei (Beta→Live), peachpayments (Beta→Live)",
+        "evidence": "Reference patch modifies these six connectors; agent patch touches none of them"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  },
+  {
+    "reasoning": "The agent updated integration_status for five connectors (boku, phonepe, santander, square, stripebilling) from Alpha/Beta to Live. Each change is a single-line, mechanically correct enum variant swap that compiles cleanly and follows the exact pattern used in the reference patch. However, the agent performed a selective audit rather than a comprehensive one. The reference patch also corrected ten connectors that the agent entirely missed: four downgrades (aci Beta→Sandbox, finix Alpha→Sandbox, payload Alpha→Sandbox, dwolla Beta→Sandbox) and six upgrades (amazonpay Alpha→Beta, calida Sandbox→Live, gigadat Sandbox→Live, loonio Sandbox→Live, nuvei Beta→Live, peachpayments Beta→Live). Because the task requires auditing all connector definitions and fixing any maturity misrepresentation, missing roughly half the necessary corrections impacts completeness. No convention violations or hygiene issues exist.",
+    "correctness": 7.0,
+    "completeness": 5.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 7.45,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade connectors over-stating readiness (aci, finix, payload, dwolla)",
+        "evidence": "aci.rs:1174 still Beta, dwolla.rs:987 still Beta — reference patch downgraded both to Sandbox"
+      },
+      {
+        "requirement": "Upgrade additional understating connectors from reference (amazonpay, calida, gigadat, loonio, nuvei, peachpayments)",
+        "evidence": "amazonpay.rs:770 still Alpha, calida.rs, gigadat.rs, loonio.rs, nuvei.rs, peachpayments.rs unchanged despite reference upgrades"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  },
+  {
+    "reasoning": "The agent performed a unidirectional audit, upgrading five connectors (boku, phonepe, santander, square, stripebilling) from Alpha/Beta to Live. These individual changes are mechanically sound, compile successfully, and follow the minimal-edit pattern. However, the agent completely missed the other direction of the audit: four connectors in the reference patch were downgraded because they overstated readiness (aci, finix, payload, dwolla). The agent also missed six additional connectors that the reference upgraded (amazonpay, calida, gigadat, loonio, nuvei, peachpayments). A proper bidirectional audit of 'each connector's declared maturity' must catch both understated and overstated statuses. The changes made are likely correct in isolation, but the audit logic is systematically incomplete. Convention and hygiene are exemplary—each file received exactly one line changed with no formatting noise or unrelated modifications.",
+    "correctness": 6.0,
+    "completeness": 3.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 6.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/aci.rs",
+        "issue": "Overstated readiness not caught: aci remained Beta when reference downgraded it to Sandbox.",
+        "evidence": "integration_status: enums::ConnectorIntegrationStatus::Beta (unchanged)"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/finix.rs",
+        "issue": "Overstated readiness not caught: finix remained Alpha when reference downgraded it to Sandbox.",
+        "evidence": "integration_status: ConnectorIntegrationStatus::Alpha (unchanged)"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/payload.rs",
+        "issue": "Overstated readiness not caught: payload remained Alpha when reference downgraded it to Sandbox.",
+        "evidence": "integration_status: enums::ConnectorIntegrationStatus::Alpha (unchanged)"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/dwolla.rs",
+        "issue": "Overstated readiness not caught: dwolla remained Beta when reference downgraded it to Sandbox.",
+        "evidence": "integration_status: enums::ConnectorIntegrationStatus::Beta (unchanged)"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade connectors that overstate operational readiness (aci, finix, payload, dwolla)",
+        "evidence": "Reference patch changed aci Beta→Sandbox, finix Alpha→Sandbox, payload Alpha→Sandbox, dwolla Beta→Sandbox; agent left all untouched"
+      },
+      {
+        "requirement": "Upgrade additional connectors that understate readiness (amazonpay, calida, gigadat, loonio, nuvei, peachpayments)",
+        "evidence": "Reference patch changed amazonpay Alpha→Beta, calida Sandbox→Live, gigadat Sandbox→Live, loonio Sandbox→Live, nuvei Beta→Live, peachpayments Beta→Live; agent left all untouched"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  },
+  {
+    "reasoning": "The agent produced five minimal, syntactically correct changes that compile cleanly. Each upgrade from Alpha/Beta to Live is a single-line enum-variant swap with no side effects, so the logic of the changes themselves is sound. However, the audit is incomplete in two critical ways. First, the agent modified a completely disjoint set of connectors from the reference patch and caught zero of the ten connectors the reference identified as inaccurate. Second, the reference patch included four downgrades (connectors overstating readiness: aci, finix, payload, dwolla), but the agent only performed upgrades, indicating a one-sided audit that missed connectors claiming higher maturity than warranted. Because the task explicitly asks to correct any declarations that understate or misrepresent readiness, missing both the downgrades and the six other upgrades from the reference leaves the majority of the work undone. Convention adherence and hygiene are perfect: each file was touched exactly once, with no formatting churn, no extra imports, and no deviation from the existing pattern.",
+    "correctness": 8.0,
+    "completeness": 4.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 7.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade aci from Beta to Sandbox (overstated readiness)",
+        "evidence": "Reference patch changed aci.rs:1174 from Beta to Sandbox; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade amazonpay from Alpha to Beta",
+        "evidence": "Reference patch changed amazonpay.rs:770 from Alpha to Beta; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade calida from Sandbox to Live",
+        "evidence": "Reference patch changed calida.rs:747 from Sandbox to Live; agent left unchanged"
+      },
+      {
+        "requirement": "Downgrade finix from Alpha to Sandbox (overstated readiness)",
+        "evidence": "Reference patch changed finix.rs:1087 from Alpha to Sandbox; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade gigadat from Sandbox to Live",
+        "evidence": "Reference patch changed gigadat.rs:1070 from Sandbox to Live; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade loonio from Sandbox to Live",
+        "evidence": "Reference patch changed loonio.rs:849 from Sandbox to Live; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade nuvei from Beta to Live",
+        "evidence": "Reference patch changed nuvei.rs:1570 from Beta to Live; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade peachpayments from Beta to Live",
+        "evidence": "Reference patch changed peachpayments.rs:823 from Beta to Live; agent left unchanged"
+      },
+      {
+        "requirement": "Downgrade payload from Alpha to Sandbox (overstated readiness)",
+        "evidence": "Reference patch changed payload.rs:932 from Alpha to Sandbox; agent left unchanged"
+      },
+      {
+        "requirement": "Downgrade dwolla from Beta to Sandbox (overstated readiness)",
+        "evidence": "Reference patch changed dwolla.rs:987 from Beta to Sandbox; agent left unchanged"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  },
+  {
+    "reasoning": "The agent upgraded 5 connectors from Alpha/Beta to Live, but these changes have zero overlap with the reference patch which updated 10 different connectors. The agent failed to perform a comprehensive audit of the connector directory, missing all the connectors identified in the reference patch. Critically, the agent only upgraded connectors but never downgraded any overstated readiness levels (e.g., aci Beta->Sandbox, finix Alpha->Sandbox, payload Alpha->Sandbox, dwolla Beta->Sandbox). The task explicitly requires correcting BOTH understated and misrepresented readiness, but the agent only addressed one direction. While the individual changes compile cleanly and follow conventions, they are unverifiable against any documented readiness criteria and represent an incomplete solution. The agent found approximately 5 out of at least 15 incorrect statuses (33%), missing 100% of the reference requirements.",
+    "correctness": 4.0,
+    "completeness": 3.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 5.8,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade aci from Beta to Sandbox",
+        "evidence": "aci.rs still shows integration_status: enums::ConnectorIntegrationStatus::Beta"
+      },
+      {
+        "requirement": "Upgrade amazonpay from Alpha to Beta",
+        "evidence": "amazonpay.rs still shows integration_status: enums::ConnectorIntegrationStatus::Alpha"
+      },
+      {
+        "requirement": "Upgrade calida from Sandbox to Live",
+        "evidence": "calida.rs still shows integration_status: enums::ConnectorIntegrationStatus::Sandbox"
+      },
+      {
+        "requirement": "Downgrade finix from Alpha to Sandbox",
+        "evidence": "finix.rs still shows integration_status: ConnectorIntegrationStatus::Alpha"
+      },
+      {
+        "requirement": "Upgrade gigadat from Sandbox to Live",
+        "evidence": "gigadat.rs still shows integration_status: enums::ConnectorIntegrationStatus::Sandbox"
+      },
+      {
+        "requirement": "Upgrade loonio from Sandbox to Live",
+        "evidence": "loonio.rs still shows integration_status: enums::ConnectorIntegrationStatus::Sandbox"
+      },
+      {
+        "requirement": "Upgrade nuvei from Beta to Live",
+        "evidence": "nuvei.rs still shows integration_status: enums::ConnectorIntegrationStatus::Beta"
+      },
+      {
+        "requirement": "Upgrade peachpayments from Beta to Live",
+        "evidence": "peachpayments.rs still shows integration_status: enums::ConnectorIntegrationStatus::Beta"
+      },
+      {
+        "requirement": "Downgrade payload from Alpha to Sandbox",
+        "evidence": "payload.rs still shows integration_status: enums::ConnectorIntegrationStatus::Alpha"
+      },
+      {
+        "requirement": "Downgrade dwolla from Beta to Sandbox",
+        "evidence": "dwolla.rs still shows integration_status: enums::ConnectorIntegrationStatus::Beta"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  },
+  {
+    "reasoning": "The agent upgraded five connectors (boku, phonepe, santander, square, stripebilling) from Alpha/Beta to Live. Each change is mechanically correct: it modifies only the integration_status enum variant, follows the exact pattern used throughout the codebase, and compiles successfully (cargo_check_affected passed). The prior review confirms these individual changes are plausible, though they cannot be independently verified without product documentation. Thus correctness for the changes that were made is solid.\n\nHowever, the agent's audit was severely incomplete. The reference patch identified ten connectors needing status corrections: four downgrades (aci Beta→Sandbox, finix Alpha→Sandbox, payload Alpha→Sandbox, dwolla Beta→Sandbox) and six upgrades (amazonpay Alpha→Beta, calida Sandbox→Live, gigadat Sandbox→Live, loonio Sandbox→Live, nuvei Beta→Live, peachpayments Beta→Live). The agent missed all ten of these. A full audit should catch both understated and overstated readiness, yet the agent only performed upgrades and addressed a completely disjoint subset of connectors. This represents a small fraction of the overall task.\n\nConvention adherence and hygiene are excellent. Each file changed by exactly one line, with no formatting churn, no unrelated modifications, and no violation of Rust or Hyperswitch conventions (no unwrap/expect/panic/dbg/todo/unsafe, no println, no numeric as casts, etc.).",
+    "correctness": 8.0,
+    "completeness": 3.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 7.2,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade aci from Beta to Sandbox",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/aci.rs:1174 still shows Beta"
+      },
+      {
+        "requirement": "Upgrade amazonpay from Alpha to Beta",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/amazonpay.rs:770 still shows Alpha"
+      },
+      {
+        "requirement": "Upgrade calida from Sandbox to Live",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/calida.rs:747 still shows Sandbox"
+      },
+      {
+        "requirement": "Downgrade finix from Alpha to Sandbox",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/finix.rs:1087 still shows Alpha"
+      },
+      {
+        "requirement": "Upgrade gigadat from Sandbox to Live",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/gigadat.rs:1070 still shows Sandbox"
+      },
+      {
+        "requirement": "Upgrade loonio from Sandbox to Live",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/loonio.rs:849 still shows Sandbox"
+      },
+      {
+        "requirement": "Upgrade nuvei from Beta to Live",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/nuvei.rs:1570 still shows Beta"
+      },
+      {
+        "requirement": "Upgrade peachpayments from Beta to Live",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/peachpayments.rs:823 still shows Beta"
+      },
+      {
+        "requirement": "Downgrade payload from Alpha to Sandbox",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/payload.rs:932 still shows Alpha"
+      },
+      {
+        "requirement": "Downgrade dwolla from Beta to Sandbox",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/dwolla.rs:987 still shows Beta"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent performed a partial audit of connector maturity statuses, modifying five connectors (boku, phonepe, santander, square, stripebilling) by upgrading them from Alpha/Beta to Live. Each individual change is mechanically correct: it compiles (cargo_check_affected passed), follows the exact same single-line pattern as the reference patch, and introduces no syntax or type errors. The prior review explicitly labels the alternative as 'valid' and calls the changes 'plausible.' However, the audit is severely incomplete. The reference patch identified ten connectors needing correction (four downgrades and six upgrades), and the agent caught zero of them. The agent systematically missed connectors that were over-stating readiness (aci, finix, payload, dwolla) and also missed six connectors the reference upgraded (amazonpay, calida, gigadat, loonio, nuvei, peachpayments). Because the task required a full audit and correction of any declarations that 'understate or misrepresent,' missing half the known issues caps completeness. Convention adherence and hygiene are perfect: one-line surgical changes with no unrelated churn.",
+    "correctness": 7.0,
+    "completeness": 5.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 7.45,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Downgrade aci from Beta to Sandbox",
+        "evidence": "Reference patch changed aci.rs:1174 to ConnectorIntegrationStatus::Sandbox; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade amazonpay from Alpha to Beta",
+        "evidence": "Reference patch changed amazonpay.rs:770 to ConnectorIntegrationStatus::Beta; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade calida from Sandbox to Live",
+        "evidence": "Reference patch changed calida.rs:747 to ConnectorIntegrationStatus::Live; agent left unchanged"
+      },
+      {
+        "requirement": "Downgrade finix from Alpha to Sandbox",
+        "evidence": "Reference patch changed finix.rs:1087 to ConnectorIntegrationStatus::Sandbox; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade gigadat from Sandbox to Live",
+        "evidence": "Reference patch changed gigadat.rs:1070 to ConnectorIntegrationStatus::Live; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade loonio from Sandbox to Live",
+        "evidence": "Reference patch changed loonio.rs:849 to ConnectorIntegrationStatus::Live; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade nuvei from Beta to Live",
+        "evidence": "Reference patch changed nuvei.rs:1570 to ConnectorIntegrationStatus::Live; agent left unchanged"
+      },
+      {
+        "requirement": "Upgrade peachpayments from Beta to Live",
+        "evidence": "Reference patch changed peachpayments.rs:823 to ConnectorIntegrationStatus::Live; agent left unchanged"
+      },
+      {
+        "requirement": "Downgrade payload from Alpha to Sandbox",
+        "evidence": "Reference patch changed payload.rs:920 to ConnectorIntegrationStatus::Sandbox; agent left unchanged"
+      },
+      {
+        "requirement": "Downgrade dwolla from Beta to Sandbox",
+        "evidence": "Reference patch changed dwolla.rs:987 to ConnectorIntegrationStatus::Sandbox; agent left unchanged"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  }
+]

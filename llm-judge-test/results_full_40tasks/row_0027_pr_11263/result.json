@@ -1,0 +1,107 @@
+{
+  "row_index": 27,
+  "repo": "juspay/hyperswitch",
+  "pr_number": "11263",
+  "base_sha": "20f62f4c81ee1b51354e41b37d09f6221ce34b5f",
+  "head_sha": "b4c68cf04eed3055406df4c042578d6e42b57eb3",
+  "model": "litellm/open-large",
+  "status": "ok",
+  "output_dir": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/results_full_40tasks/row_0027_pr_11263",
+  "worktree": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0027_pr_11263",
+  "agent_attempts": 1,
+  "agent_empty_patch_retries": 0,
+  "agent_returncode": 0,
+  "agent_elapsed_seconds": 1432.38,
+  "has_patch": true,
+  "num_changed_files": 2,
+  "changed_files": [
+    "crates/hyperswitch_domain_models/src/vault.rs",
+    "crates/router/src/core/payment_methods.rs"
+  ],
+  "file_f1": 0.8,
+  "file_recall": 0.667,
+  "added_line_f1": 0.044,
+  "removed_line_f1": 0.0,
+  "style_score": 10.0,
+  "compilation_summary": {
+    "passed": 1,
+    "total": 2,
+    "all_passed": false
+  },
+  "review_available": true,
+  "judge_count": 8,
+  "judge_aggregate": {
+    "judge_count": 8,
+    "valid_judges": 8,
+    "raw_scores": {
+      "correctness": [
+        4.0,
+        7.0,
+        5.0
+      ],
+      "completeness": [
+        5.0,
+        7.0,
+        6.0
+      ],
+      "convention_adherence": [
+        8.0,
+        6.0,
+        7.0
+      ],
+      "hygiene": [
+        9.0,
+        9.0,
+        9.0
+      ],
+      "overall": [
+        5.85,
+        7.1,
+        6.3
+      ]
+    },
+    "mean": {
+      "correctness": 5.333,
+      "completeness": 6.0,
+      "convention_adherence": 7.0,
+      "hygiene": 9.0,
+      "overall": 6.417
+    },
+    "std_dev": {
+      "correctness": 1.528,
+      "completeness": 1.0,
+      "convention_adherence": 1.0,
+      "hygiene": 0.0,
+      "overall": 0.633
+    },
+    "median": {
+      "correctness": 5.0,
+      "completeness": 6.0,
+      "convention_adherence": 7.0,
+      "hygiene": 9.0,
+      "overall": 6.3
+    },
+    "outliers_excluded": {
+      "correctness": [],
+      "completeness": [],
+      "convention_adherence": [],
+      "hygiene": [],
+      "overall": []
+    },
+    "outlier_explanations": {
+      "correctness": "Too few judges (< 4) to compute reliable IQR bounds; no outliers excluded.",
+      "completeness": "Too few judges (< 4) to compute reliable IQR bounds; no outliers excluded.",
+      "convention_adherence": "Too few judges (< 4) to compute reliable IQR bounds; no outliers excluded.",
+      "hygiene": "Too few judges (< 4) to compute reliable IQR bounds; no outliers excluded.",
+      "overall": "Too few judges (< 4) to compute reliable IQR bounds; no outliers excluded."
+    },
+    "final_score": {
+      "correctness": 5.333,
+      "completeness": 6.0,
+      "convention_adherence": 7.0,
+      "hygiene": 9.0,
+      "overall": 6.417
+    }
+  },
+  "elapsed_seconds": 2315.59
+}

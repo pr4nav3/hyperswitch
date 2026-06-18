@@ -1,0 +1,408 @@
+[
+  {
+    "reasoning": "The agent submitted a completely empty patch. No files were modified, no logic was implemented, and none of the task requirements were addressed. The reference patch demonstrates a substantial fix across approximately 16 files, introducing connector_customer_id persistence in mandate reference records, new connector-specific ID generation traits, updated payment/payout resolution logic, and migration handling. Because the agent produced zero changes, correctness and completeness are at the lowest possible tier. There are no convention violations since no code was written, but equally no conventions were followed. Hygiene is irrelevant because no required work was performed.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 0.0,
+    "hygiene": 0.0,
+    "overall": 0.0,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add connector_customer_id field to PaymentsMandateReferenceRecord and PayoutsMandateReferenceRecord structs",
+        "evidence": "Empty agent patch; reference adds connector_customer_id to diesel_models and domain_models mandate records"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id in ConnectorSpecifications and Adyen/AdyenPlatform connectors",
+        "evidence": "Empty agent patch; reference adds trait method and implementations for Adyen and AdyenPlatform"
+      },
+      {
+        "requirement": "Resolve connector customer ID from payment method mandate references for recurring payments",
+        "evidence": "Empty agent patch; reference adds get_payment_connector_customer_id on PaymentMethod and uses it in payment transformers"
+      },
+      {
+        "requirement": "Resolve connector customer ID from payment method mandate references for payouts",
+        "evidence": "Empty agent patch; reference adds get_payout_connector_customer_id and updates payout router construction"
+      },
+      {
+        "requirement": "Update migration logic to store connector_customer_id in mandate references instead of customer table",
+        "evidence": "Empty agent patch; reference removes build_connector_customer_update and stores ID in mandate refs during migration"
+      },
+      {
+        "requirement": "Update tokenization to initialize connector_customer_id in mandate records",
+        "evidence": "Empty agent patch; reference updates add/update_connector_mandate_details functions to include connector_customer_id: None"
+      },
+      {
+        "requirement": "Remove connector_customer from PaymentMethodUpdateResponse and related API models",
+        "evidence": "Empty agent patch; reference removes connector_customer fields from API response structs"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  },
+  {
+    "reasoning": "The agent produced an entirely empty patch, making zero modifications to any files in the repository. The task requires substantial changes across at least 10 files to fix connector customer identification for Adyen recurring and off-session payments, including adding connector_customer_id to mandate reference records, implementing generate_connector_customer_id for Adyen connectors, refactoring transformer logic to use centralized customer ID resolution, adding utility functions in router core, and updating payment/payout flows. None of these requirements were addressed. The compilation results show the unchanged code compiles (cargo_check_affected passed) and the rustfmt failure is purely environmental (missing cargo-fmt installation), so there are no agent-caused compilation errors. With no code changes, there are no convention violations or hygiene issues, but this is vacuously true.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add connector_customer_id field to PaymentsMandateReferenceRecord",
+        "evidence": "No changes in crates/diesel_models/src/payment_method.rs or crates/hyperswitch_domain_models/src/mandates.rs"
+      },
+      {
+        "requirement": "Add connector_customer_id field to PayoutsMandateReferenceRecord",
+        "evidence": "No changes in crates/diesel_models/src/payment_method.rs or crates/hyperswitch_domain_models/src/mandates.rs"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id for Adyen connector",
+        "evidence": "No changes in crates/hyperswitch_connectors/src/connectors/adyen.rs"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id for Adyenplatform connector",
+        "evidence": "No changes in crates/hyperswitch_connectors/src/connectors/adyenplatform.rs"
+      },
+      {
+        "requirement": "Add get_payment_connector_customer_id and get_payout_connector_customer_id methods to PaymentMethod",
+        "evidence": "No changes in crates/hyperswitch_domain_models/src/payment_methods.rs"
+      },
+      {
+        "requirement": "Add generate_connector_customer_id to ConnectorSpecifications trait and ConnectorEnum dispatch",
+        "evidence": "No changes in crates/hyperswitch_interfaces/src/api.rs or connector_integration_interface.rs"
+      },
+      {
+        "requirement": "Refactor Adyen transformers to use centralized get_connector_customer_id instead of inline fallback construction",
+        "evidence": "No changes in crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs"
+      },
+      {
+        "requirement": "Refactor Adyenplatform payout transformers to use centralized customer ID resolution",
+        "evidence": "No changes in crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs"
+      },
+      {
+        "requirement": "Add get_connector_customer_id and get_payout_connector_customer_id utility functions in router core",
+        "evidence": "No changes in crates/router/src/core/utils.rs"
+      },
+      {
+        "requirement": "Update payments flow to populate connector_customer using new resolution logic",
+        "evidence": "No changes in crates/router/src/core/payments.rs or transformers.rs"
+      },
+      {
+        "requirement": "Update payouts flow to populate connector_customer using new resolution logic",
+        "evidence": "No changes in crates/router/src/core/payouts.rs"
+      },
+      {
+        "requirement": "Update migration logic to handle connector_customer_id in mandate records",
+        "evidence": "No changes in crates/router/src/core/payment_methods/migration.rs"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  },
+  {
+    "reasoning": "The agent patch is completely empty — no files were modified. The task requires fixing connector customer identification for recurring/off-session Adyen payments by adding `connector_customer_id` to mandate reference records, implementing `generate_connector_customer_id` in the Adyen and AdyenPlatform connectors, updating transformer logic to use `get_connector_customer_id()`, adding helper methods on `PaymentMethod`, extending the `ConnectorSpecifications` trait, and wiring everything into payments and payouts flows. None of these were implemented. The compilation check shows `cargo_check_affected` passed, and the `rustfmt` failure is environmental (missing `cargo-fmt`), so there are no agent-caused compilation issues. With no code changes, there are no convention violations or hygiene problems, but the task is entirely unaddressed.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add connector_customer_id to PaymentsMandateReferenceRecord",
+        "evidence": "Empty agent patch — field not added"
+      },
+      {
+        "requirement": "Add connector_customer_id to PayoutsMandateReferenceRecord",
+        "evidence": "Empty agent patch — field not added"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id on Adyen connector",
+        "evidence": "Empty agent patch — method not implemented"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id on AdyenPlatform connector",
+        "evidence": "Empty agent patch — method not implemented"
+      },
+      {
+        "requirement": "Update Adyen transformers to use get_connector_customer_id instead of manual fallback logic",
+        "evidence": "Empty agent patch — transformers unchanged"
+      },
+      {
+        "requirement": "Update AdyenPlatform payout transformers to use get_connector_customer_id",
+        "evidence": "Empty agent patch — payout transformers unchanged"
+      },
+      {
+        "requirement": "Add get_payment_connector_customer_id and get_payout_connector_customer_id to PaymentMethod",
+        "evidence": "Empty agent patch — helpers not added"
+      },
+      {
+        "requirement": "Add generate_connector_customer_id to ConnectorSpecifications trait and ConnectorEnum dispatch",
+        "evidence": "Empty agent patch — trait unchanged"
+      },
+      {
+        "requirement": "Wire connector customer resolution into payments and payouts router data construction",
+        "evidence": "Empty agent patch — core utils and flow files unchanged"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  },
+  {
+    "reasoning": "The agent patch is completely empty, as confirmed by both the diff block and the prior review assessment explicitly stating there are no agent-caused compilation errors. While cargo_check_affected passed, this only proves the unmodified codebase compiles and does not excuse the absence of required changes. The reference patch modifies sixteen files to fix connector customer identification for recurring and off-session Adyen payments, but the agent implemented zero lines. Therefore, the core bug—failure to locate and reuse the connector-specific customer identifier for merchant-initiated transactions—remains entirely unaddressed. None of the task requirements were fulfilled, including persisting connector_customer_id in mandate records, adding generate_connector_customer_id to Adyen connectors, updating transformer fallback logic, or implementing resolution utilities in the router core. Because the patch contains no code, there are no Hyperswitch or Rust convention violations such as unwrap, expect, panic, dbg, todo, unsafe, bad imports, or hardcoded constants. Hygiene is likewise perfect since there are no extraneous changes, formatting churn, or unrelated modifications.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add connector_customer_id to PaymentsMandateReferenceRecord and PayoutsMandateReferenceRecord structs",
+        "evidence": "Empty patch; no changes to diesel_models/src/payment_method.rs or hyperswitch_domain_models/src/mandates.rs"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id for Adyen and Adyenplatform connectors",
+        "evidence": "Empty patch; no changes to hyperswitch_connectors/src/connectors/adyen.rs or adyenplatform.rs"
+      },
+      {
+        "requirement": "Remove inline shopper_reference fallback logic and use resolved connector_customer_id in Adyen transformers",
+        "evidence": "Empty patch; no changes to adyen/transformers.rs or adyenplatform/transformers/payouts.rs"
+      },
+      {
+        "requirement": "Add get_payment_connector_customer_id and get_payout_connector_customer_id methods on PaymentMethod",
+        "evidence": "Empty patch; no changes to hyperswitch_domain_models/src/payment_methods.rs"
+      },
+      {
+        "requirement": "Add get_connector_customer_id and get_payout_connector_customer_id resolution utilities in router core",
+        "evidence": "Empty patch; no changes to router/src/core/utils.rs, payments.rs, payouts.rs, or transformers.rs"
+      },
+      {
+        "requirement": "Update migration logic to handle connector_customer_id updates in mandate references",
+        "evidence": "Empty patch; no changes to router/src/core/payment_methods/migration.rs"
+      },
+      {
+        "requirement": "Update tokenization flows to initialize connector_customer_id in mandate records",
+        "evidence": "Empty patch; no changes to router/src/core/payments/tokenization.rs"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  },
+  {
+    "reasoning": "The agent patch is completely empty, meaning no code changes were produced whatsoever. While cargo_check_affected passed (the existing codebase compiles), the agent failed to implement any aspect of the required fix. The task demanded resolving and reusing connector-specific customer identifiers for recurring and off-session Adyen payments and payouts. The reference patch demonstrates this required adding connector_customer_id to mandate reference records, implementing lookup methods on PaymentMethod, adding generate_connector_customer_id to connector specifications, updating core utilities for resolution, modifying Adyen/AdyenPlatform transformers, and rewriting migration logic. None of this was attempted. Because no code was written, there are no introduced convention violations or hygiene problems, but the functional fix is entirely absent.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add connector_customer_id to PaymentsMandateReferenceRecord and PayoutsMandateReferenceRecord in domain and diesel models",
+        "evidence": "Empty patch; reference adds this field to both mandate reference structs"
+      },
+      {
+        "requirement": "Implement get_payment_connector_customer_id and get_payout_connector_customer_id on PaymentMethod",
+        "evidence": "Empty patch; reference adds helpers to lookup connector customer from stored mandate references"
+      },
+      {
+        "requirement": "Add generate_connector_customer_id to ConnectorSpecifications and ConnectorEnum dispatch",
+        "evidence": "Empty patch; reference defines trait method and dispatches for Old/New connectors"
+      },
+      {
+        "requirement": "Implement Adyen and AdyenPlatform generate_connector_customer_id overrides",
+        "evidence": "Empty patch; reference implements merchant_id + customer_id formatting for both connectors"
+      },
+      {
+        "requirement": "Update core utils with get_connector_customer_id and get_payout_connector_customer_id resolution",
+        "evidence": "Empty patch; reference adds utility functions that prioritize mandate-stored IDs, then existing IDs, then generated IDs"
+      },
+      {
+        "requirement": "Update Adyen transformers to use resolved connector_customer_id instead of inline shopper_reference construction",
+        "evidence": "Empty patch; reference replaces build_shopper_reference and manual fallback logic with get_connector_customer_id calls"
+      },
+      {
+        "requirement": "Update AdyenPlatform payout transformers to use resolved connector_customer_id",
+        "evidence": "Empty patch; reference removes inline fallback formatting in favor of router_data.get_connector_customer_id"
+      },
+      {
+        "requirement": "Update payment authorization and transformer flows to populate connector_customer on router data",
+        "evidence": "Empty patch; reference integrates core_utils::get_connector_customer_id into payments and transformers"
+      },
+      {
+        "requirement": "Rewrite migration logic to store connector_customer_id in mandate records rather than customer table",
+        "evidence": "Empty patch; reference removes customer table update and instead updates payments/payouts mandate records"
+      },
+      {
+        "requirement": "Update tokenization and payout creation to initialize connector_customer_id in mandate records",
+        "evidence": "Empty patch; reference populates connector_customer_id: None in mandate record constructors"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  },
+  {
+    "reasoning": "The agent produced a completely empty patch --- no files were modified, no logic was implemented. The task requires fixing connector customer identification for recurring/off-session Adyen payments, which involves 16 files of changes in the reference patch (adding connector_customer_id to mandate records, updating connector traits, modifying payment and payout flows, etc.). The agent delivered none of it. cargo_check_affected passed because no code was touched; rustfmt failed due to a missing environment binary, which is irrelevant. Because the diff is empty, correctness and completeness are at the floor: the bug remains entirely unfixed and zero requirements are met. Convention adherence and hygiene are nominally perfect since no violating code was introduced, but that is cold comfort given the total absence of implementation.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Store connector_customer_id in PaymentsMandateReferenceRecord and PayoutsMandateReferenceRecord",
+        "evidence": "No changes to diesel_models or domain models"
+      },
+      {
+        "requirement": "Add generate_connector_customer_id to ConnectorSpecifications for Adyen and AdyenPlatform",
+        "evidence": "No connector trait implementations modified"
+      },
+      {
+        "requirement": "Add get_payment_connector_customer_id and get_payout_connector_customer_id to PaymentMethod",
+        "evidence": "No changes to payment_methods.rs in domain models"
+      },
+      {
+        "requirement": "Resolve connector customer from mandate reference in payment and payout flows",
+        "evidence": "No changes to router/src/core/payments.rs, transformers.rs, payouts.rs, or utils.rs"
+      },
+      {
+        "requirement": "Remove connector_customer from PaymentMethodUpdateResponse and related migration logic",
+        "evidence": "No changes to migration.rs or api_models"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  },
+  {
+    "reasoning": "The agent patch is completely empty. Zero files were modified. The reference patch required changes across 16 files spanning diesel_models, domain_models, connectors (adyen, adyenplatform), interfaces, and router core (payments, payouts, utils, migration, tokenization, transformers) to fix connector customer identification for recurring/off-session Adyen payments. No aspect of the task was attempted. The compilation checks are irrelevant since there are no code changes to evaluate. The prior review assessment confirms the rustfmt failure was environmental and cargo_check_affected passed vacuously with no affected files.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "N/A",
+        "issue": "Agent produced empty patch - no code changes at all",
+        "evidence": "agent.patch has 0 lines; git diff shows no modifications"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Add connector_customer_id field to PaymentsMandateReferenceRecord and PayoutsMandateReferenceRecord in diesel_models",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Add get_payment_connector_customer_id and get_payout_connector_customer_id methods to PaymentMethod in domain_models",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Add generate_connector_customer_id to ConnectorSpecifications trait and implement for Adyen/Adyenplatform",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Remove build_shopper_reference helper, refactor to use get_connector_customer_id in adyen transformers",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Refactor adyenplatform payouts transformers to use get_connector_customer_id",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Add get_connector_customer_id and get_payout_connector_customer_id utilities in router core",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Wire connector customer resolution into payments.rs and transformers.rs",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Wire connector customer resolution into payouts construct_payout_router_data",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Initialize connector_customer_id: None in tokenization helpers",
+        "evidence": "No changes made"
+      },
+      {
+        "requirement": "Store connector_customer_id in mandate reference records during migration",
+        "evidence": "No changes made"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent produced an entirely empty patch. No files were modified, no logic was implemented, and no requirements from the task were addressed. The task required fixing connector customer identification for recurring/off-session Adyen payments by: (1) adding connector_customer_id to mandate reference records, (2) implementing generate_connector_customer_id in connector specifications, (3) creating resolution helpers in router core utils, (4) updating Adyen transformers to use get_connector_customer_id instead of build_shopper_reference, and (5) handling the connector customer ID flow in payments and payouts. None of these were implemented. The codebase remains identical to the base commit with zero agent contributions.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add connector_customer_id to PaymentsMandateReferenceRecord",
+        "evidence": "Field missing from diesel_models/src/payment_method.rs:960"
+      },
+      {
+        "requirement": "Add connector_customer_id to PayoutsMandateReferenceRecord",
+        "evidence": "Field missing from diesel_models/src/payment_method.rs"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id for Adyen connector",
+        "evidence": "Method missing from hyperswitch_connectors/src/connectors/adyen.rs"
+      },
+      {
+        "requirement": "Implement generate_connector_customer_id for AdyenPlatform connector",
+        "evidence": "Method missing from hyperswitch_connectors/src/connectors/adyenplatform.rs"
+      },
+      {
+        "requirement": "Add generate_connector_customer_id to ConnectorSpecifications trait",
+        "evidence": "Method missing from hyperswitch_interfaces/src/api.rs"
+      },
+      {
+        "requirement": "Add get_connector_customer_id helper in router core utils",
+        "evidence": "Function missing from router/src/core/utils.rs"
+      },
+      {
+        "requirement": "Add get_payout_connector_customer_id helper in router core utils",
+        "evidence": "Function missing from router/src/core/utils.rs"
+      },
+      {
+        "requirement": "Update Adyen transformers to use get_connector_customer_id instead of build_shopper_reference",
+        "evidence": "build_shopper_reference still exists; get_connector_customer_id not used"
+      },
+      {
+        "requirement": "Update payments flow to resolve connector customer ID from mandate references",
+        "evidence": "No changes in router/src/core/payments.rs or transformers.rs"
+      },
+      {
+        "requirement": "Update payouts flow to resolve connector customer ID from mandate references",
+        "evidence": "No changes in router/src/core/payouts.rs"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  }
+]

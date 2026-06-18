@@ -1,0 +1,574 @@
+From 0fb116b56342b0fcc894bc4de687bb5a7b72e538 Mon Sep 17 00:00:00 2001
+From: Mani Chandra Dulam <mani.dchandra@juspay.in>
+Date: Wed, 7 Jan 2026 22:26:05 +0530
+Subject: [PATCH 1/6] refactor: use is_encryption_service_enabled() in transfer
+
+---
+ crates/common_utils/src/keymanager.rs         | 26 +++++++++----
+ crates/common_utils/src/types/keymanager.rs   | 12 ++++++
+ .../src/type_encryption.rs                    | 35 ++++++------------
+ crates/router/src/core/admin.rs               | 37 ++++++++-----------
+ crates/router/src/types/domain/user.rs        | 22 +++++------
+ 5 files changed, 66 insertions(+), 66 deletions(-)
+
+diff --git a/crates/common_utils/src/keymanager.rs b/crates/common_utils/src/keymanager.rs
+index a21eaa918b3..8f3612d352a 100644
+--- a/crates/common_utils/src/keymanager.rs
++++ b/crates/common_utils/src/keymanager.rs
+@@ -235,10 +235,15 @@ impl ConvertRaw for TransientBatchDecryptDataRequest {
+ pub async fn create_key_in_key_manager(
+     state: &KeyManagerState,
+     request_body: EncryptionCreateRequest,
+-) -> errors::CustomResult<DataKeyCreateResponse, errors::KeyManagerError> {
+-    call_encryption_service(state, Method::POST, "key/create", request_body)
+-        .await
+-        .change_context(errors::KeyManagerError::KeyAddFailed)
++) -> errors::CustomResult<Option<DataKeyCreateResponse>, errors::KeyManagerError> {
++    if !state.is_encryption_service_enabled() {
++        Ok(None)
++    } else {
++        call_encryption_service(state, Method::POST, "key/create", request_body)
++            .await
++            .map(Some)
++            .change_context(errors::KeyManagerError::KeyAddFailed)
++    }
+ }
+ 
+ /// A function to transfer the key in keymanager
+@@ -246,8 +251,13 @@ pub async fn create_key_in_key_manager(
+ pub async fn transfer_key_to_key_manager(
+     state: &KeyManagerState,
+     request_body: EncryptionTransferRequest,
+-) -> errors::CustomResult<DataKeyCreateResponse, errors::KeyManagerError> {
+-    call_encryption_service(state, Method::POST, "key/transfer", request_body)
+-        .await
+-        .change_context(errors::KeyManagerError::KeyTransferFailed)
++) -> errors::CustomResult<Option<DataKeyCreateResponse>, errors::KeyManagerError> {
++    if !state.is_encryption_service_enabled() {
++        Ok(None)
++    } else {
++        call_encryption_service(state, Method::POST, "key/transfer", request_body)
++            .await
++            .map(Some)
++            .change_context(errors::KeyManagerError::KeyTransferFailed)
++    }
+ }
+diff --git a/crates/common_utils/src/types/keymanager.rs b/crates/common_utils/src/types/keymanager.rs
+index fb0a074ade1..a28a6e600a7 100644
+--- a/crates/common_utils/src/types/keymanager.rs
++++ b/crates/common_utils/src/types/keymanager.rs
+@@ -75,6 +75,7 @@ impl KeyManagerState {
+             infra_values: Default::default(),
+         }
+     }
++
+     pub fn add_confirm_value_in_infra_values(
+         &self,
+         is_confirm_operation: bool,
+@@ -91,6 +92,17 @@ impl KeyManagerState {
+             infra_values
+         })
+     }
++
++    pub fn is_encryption_service_enabled(&self) -> bool {
++        #[cfg(feature = "encryption_service")]
++        {
++            self.enabled
++        }
++        #[cfg(not(feature = "encryption_service"))]
++        {
++            false
++        }
++    }
+ }
+ 
+ pub trait GetKeymanagerTenant {
+diff --git a/crates/hyperswitch_domain_models/src/type_encryption.rs b/crates/hyperswitch_domain_models/src/type_encryption.rs
+index 8bb9ab9ac8d..da8c1f331f6 100644
+--- a/crates/hyperswitch_domain_models/src/type_encryption.rs
++++ b/crates/hyperswitch_domain_models/src/type_encryption.rs
+@@ -99,17 +99,6 @@ mod encrypt {
+         ) -> CustomResult<FxHashMap<String, Self>, errors::CryptoError>;
+     }
+ 
+-    fn is_encryption_service_enabled(_state: &KeyManagerState) -> bool {
+-        #[cfg(feature = "encryption_service")]
+-        {
+-            _state.enabled
+-        }
+-        #[cfg(not(feature = "encryption_service"))]
+-        {
+-            false
+-        }
+-    }
+-
+     #[async_trait]
+     impl<
+             V: crypto::DecodeMessage + crypto::EncodeMessage + Send + 'static,
+@@ -126,7 +115,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<Self, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::encrypt(masked_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -161,7 +150,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<Self, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::decrypt(encrypted_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -235,7 +224,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<FxHashMap<String, Self>, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::batch_encrypt(masked_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -270,7 +259,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<FxHashMap<String, Self>, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::batch_decrypt(encrypted_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -364,7 +353,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<Self, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::encrypt(masked_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -399,7 +388,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<Self, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::decrypt(encrypted_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -472,7 +461,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<FxHashMap<String, Self>, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::batch_encrypt(masked_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -507,7 +496,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<FxHashMap<String, Self>, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::batch_decrypt(encrypted_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -836,7 +825,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<Self, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::encrypt(masked_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -871,7 +860,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<Self, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::decrypt(encrypted_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -939,7 +928,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<FxHashMap<String, Self>, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::batch_encrypt(masked_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+@@ -974,7 +963,7 @@ mod encrypt {
+             crypt_algo: V,
+         ) -> CustomResult<FxHashMap<String, Self>, errors::CryptoError> {
+             // If encryption service is not enabled, fall back to application encryption or else call encryption service
+-            if !is_encryption_service_enabled(state) {
++            if !state.is_encryption_service_enabled() {
+                 Self::batch_decrypt(encrypted_data, key, crypt_algo).await
+             } else {
+                 let result: Result<
+diff --git a/crates/router/src/core/admin.rs b/crates/router/src/core/admin.rs
+index bbdd6af7626..715d1eb3005 100644
+--- a/crates/router/src/core/admin.rs
++++ b/crates/router/src/core/admin.rs
+@@ -13,6 +13,11 @@ use common_utils::{
+ };
+ #[cfg(all(any(feature = "v1", feature = "v2"), feature = "olap"))]
+ use diesel_models::{business_profile::CardTestingGuardConfig, organization::OrganizationBridge};
++#[cfg(feature = "olap")]
++use {
++    base64::Engine,
++    common_utils::{keymanager, types::keymanager::EncryptionTransferRequest},
++};
+ use diesel_models::{configs, payment_method};
+ use error_stack::{report, FutureExt, ResultExt};
+ use external_services::http_client::client;
+@@ -189,9 +194,6 @@ pub async fn create_merchant_account(
+     req: api::MerchantAccountCreate,
+     org_data_from_auth: Option<authentication::AuthenticationDataWithOrg>,
+ ) -> RouterResponse<api::MerchantAccountResponse> {
+-    #[cfg(feature = "keymanager_create")]
+-    use common_utils::{keymanager, types::keymanager::EncryptionTransferRequest};
+-
+     let db = state.store.as_ref();
+     let key = services::generate_aes256_key()
+         .change_context(errors::ApiErrorResponse::InternalServerError)
+@@ -202,25 +204,16 @@ pub async fn create_merchant_account(
+     let key_manager_state: &KeyManagerState = &(&state).into();
+     let merchant_id = req.get_merchant_reference_id();
+     let identifier = km_types::Identifier::Merchant(merchant_id.clone());
+-    #[cfg(feature = "keymanager_create")]
+-    {
+-        use base64::Engine;
+-
+-        use crate::consts::BASE64_ENGINE;
+-
+-        if key_manager_state.enabled {
+-            keymanager::transfer_key_to_key_manager(
+-                key_manager_state,
+-                EncryptionTransferRequest {
+-                    identifier: identifier.clone(),
+-                    key: masking::StrongSecret::new(BASE64_ENGINE.encode(key)),
+-                },
+-            )
+-            .await
+-            .change_context(errors::ApiErrorResponse::DuplicateMerchantAccount)
+-            .attach_printable("Failed to insert key to KeyManager")?;
+-        }
+-    }
++    keymanager::transfer_key_to_key_manager(
++        key_manager_state,
++        EncryptionTransferRequest {
++            identifier: identifier.clone(),
++            key: masking::StrongSecret::new(consts::BASE64_ENGINE.encode(key)),
++        },
++    )
++    .await
++    .change_context(errors::ApiErrorResponse::DuplicateMerchantAccount)
++    .attach_printable("Failed to insert key to KeyManager")?;
+ 
+     let key_store = domain::MerchantKeyStore {
+         merchant_id: merchant_id.clone(),
+diff --git a/crates/router/src/types/domain/user.rs b/crates/router/src/types/domain/user.rs
+index ab0e1cbba66..c1c7f461815 100644
+--- a/crates/router/src/types/domain/user.rs
++++ b/crates/router/src/types/domain/user.rs
+@@ -25,7 +25,6 @@ use masking::{ExposeInterface, PeekInterface, Secret};
+ use rand::distributions::{Alphanumeric, DistString};
+ use time::PrimitiveDateTime;
+ use unicode_segmentation::UnicodeSegmentation;
+-#[cfg(feature = "keymanager_create")]
+ use {base64::Engine, common_utils::types::keymanager::EncryptionTransferRequest};
+ 
+ use crate::{
+@@ -1212,18 +1211,15 @@ impl UserFromStorage {
+                 .change_context(UserErrors::InternalServerError)
+                 .attach_printable("Unable to generate aes 256 key")?;
+ 
+-            #[cfg(feature = "keymanager_create")]
+-            {
+-                common_utils::keymanager::transfer_key_to_key_manager(
+-                    key_manager_state,
+-                    EncryptionTransferRequest {
+-                        identifier: Identifier::User(self.get_user_id().to_string()),
+-                        key: masking::StrongSecret::new(consts::BASE64_ENGINE.encode(key)),
+-                    },
+-                )
+-                .await
+-                .change_context(UserErrors::InternalServerError)?;
+-            }
++            common_utils::keymanager::transfer_key_to_key_manager(
++                key_manager_state,
++                EncryptionTransferRequest {
++                    identifier: Identifier::User(self.get_user_id().to_string()),
++                    key: masking::StrongSecret::new(consts::BASE64_ENGINE.encode(key)),
++                },
++            )
++            .await
++            .change_context(UserErrors::InternalServerError)?;
+ 
+             let key_store = UserKeyStore {
+                 user_id: self.get_user_id().to_string(),
+
+From 526a14da1548ee46c0678516e10de69ac0157f4f Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Wed, 7 Jan 2026 17:00:50 +0000
+Subject: [PATCH 2/6] chore: run formatter
+
+---
+ crates/router/src/core/admin.rs        | 10 +++++-----
+ crates/router/src/types/domain/user.rs |  9 ++++++---
+ 2 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/crates/router/src/core/admin.rs b/crates/router/src/core/admin.rs
+index 5d6db7f82de..7edff44be24 100644
+--- a/crates/router/src/core/admin.rs
++++ b/crates/router/src/core/admin.rs
+@@ -13,11 +13,6 @@ use common_utils::{
+ };
+ #[cfg(all(any(feature = "v1", feature = "v2"), feature = "olap"))]
+ use diesel_models::{business_profile::CardTestingGuardConfig, organization::OrganizationBridge};
+-#[cfg(feature = "olap")]
+-use {
+-    base64::Engine,
+-    common_utils::{keymanager, types::keymanager::EncryptionTransferRequest},
+-};
+ use diesel_models::{configs, payment_method};
+ use error_stack::{report, FutureExt, ResultExt};
+ use external_services::http_client::client;
+@@ -27,6 +22,11 @@ use hyperswitch_domain_models::merchant_connector_account::{
+ use masking::{ExposeInterface, PeekInterface, Secret};
+ use pm_auth::types as pm_auth_types;
+ use uuid::Uuid;
++#[cfg(feature = "olap")]
++use {
++    base64::Engine,
++    common_utils::{keymanager, types::keymanager::EncryptionTransferRequest},
++};
+ 
+ use super::routing::helpers::redact_cgraph_cache;
+ #[cfg(any(feature = "v1", feature = "v2"))]
+diff --git a/crates/router/src/types/domain/user.rs b/crates/router/src/types/domain/user.rs
+index f2aa3aebeaf..a216dc211a4 100644
+--- a/crates/router/src/types/domain/user.rs
++++ b/crates/router/src/types/domain/user.rs
+@@ -8,10 +8,14 @@ use std::{
+ use api_models::{
+     admin as admin_api, organization as api_org, user as user_api, user_role as user_role_api,
+ };
++use base64::Engine;
+ use common_enums::EntityType;
+ use common_utils::{
+-    crypto::Encryptable, id_type, new_type::MerchantName, pii, type_name,
+-    types::keymanager::Identifier,
++    crypto::Encryptable,
++    id_type,
++    new_type::MerchantName,
++    pii, type_name,
++    types::keymanager::{EncryptionTransferRequest, Identifier},
+ };
+ use diesel_models::{
+     enums::{TotpStatus, UserRoleVersion, UserStatus},
+@@ -25,7 +29,6 @@ use masking::{ExposeInterface, PeekInterface, Secret};
+ use rand::distributions::{Alphanumeric, DistString};
+ use time::PrimitiveDateTime;
+ use unicode_segmentation::UnicodeSegmentation;
+-use {base64::Engine, common_utils::types::keymanager::EncryptionTransferRequest};
+ 
+ use crate::{
+     consts,
+
+From 0edd099c0d2779a959f0281a59fe405dc08c5558 Mon Sep 17 00:00:00 2001
+From: Mani Chandra Dulam <mani.dchandra@juspay.in>
+Date: Thu, 8 Jan 2026 21:55:58 +0530
+Subject: [PATCH 3/6] fix: use correct dependencies for encryption_service
+
+---
+ crates/hyperswitch_domain_models/Cargo.toml | 4 ++--
+ crates/payment_methods/Cargo.toml           | 3 ++-
+ crates/router/Cargo.toml                    | 4 ++--
+ crates/subscriptions/Cargo.toml             | 3 ++-
+ 4 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/crates/hyperswitch_domain_models/Cargo.toml b/crates/hyperswitch_domain_models/Cargo.toml
+index 1503ebe07db..6d3ef7efeeb 100644
+--- a/crates/hyperswitch_domain_models/Cargo.toml
++++ b/crates/hyperswitch_domain_models/Cargo.toml
+@@ -9,7 +9,7 @@ license.workspace = true
+ 
+ [features]
+ default = ["olap", "frm"]
+-encryption_service = []
++encryption_service = ["common_utils/encryption_service"]
+ olap = []
+ payouts = ["api_models/payouts"]
+ frm = ["api_models/frm"]
+@@ -24,7 +24,7 @@ revenue_recovery= []
+ api_models = { version = "0.1.0", path = "../api_models", features = ["errors"] }
+ cards = { version = "0.1.0", path = "../cards" }
+ common_enums = { version = "0.1.0", path = "../common_enums" }
+-common_utils = { version = "0.1.0", path = "../common_utils", features = ["async_ext", "metrics", "encryption_service", "keymanager"] }
++common_utils = { version = "0.1.0", path = "../common_utils", features = ["async_ext", "metrics", "keymanager"] }
+ common_types = { version = "0.1.0", path = "../common_types" }
+ diesel_models = { version = "0.1.0", path = "../diesel_models", features = ["kv_store"], default-features = false }
+ masking = { version = "0.1.0", path = "../masking" }
+diff --git a/crates/payment_methods/Cargo.toml b/crates/payment_methods/Cargo.toml
+index 9e25a8375dc..001262636b6 100644
+--- a/crates/payment_methods/Cargo.toml
++++ b/crates/payment_methods/Cargo.toml
+@@ -23,7 +23,7 @@ api_models = { version = "0.1.0", path = "../api_models", features = ["errors",
+ cards = { version = "0.1.0", path = "../cards" }
+ common_types = { version = "0.1.0", path = "../common_types" }
+ common_enums = { version = "0.1.0", path = "../common_enums" }
+-common_utils = { version = "0.1.0", path = "../common_utils", features = ["signals", "async_ext", "logs", "metrics", "keymanager", "encryption_service"] }
++common_utils = { version = "0.1.0", path = "../common_utils", features = ["signals", "async_ext", "logs", "metrics", "keymanager"] }
+ hyperswitch_domain_models = { version = "0.1.0", path = "../hyperswitch_domain_models", default-features = false }
+ router_env = { version = "0.1.0", path = "../router_env", features = ["log_extra_implicit_fields", "log_custom_entries_to_extra"] }
+ scheduler = { version = "0.1.0", path = "../scheduler", default-features = false }
+@@ -35,6 +35,7 @@ workspace = true
+ 
+ [features]
+ default = ["dummy_connector", "payouts"]
++encryption_service = ["common_utils/encryption_service"]
+ v1 = ["hyperswitch_domain_models/v1", "storage_impl/v1", "common_utils/v1", "scheduler/v1", "common_types/v1"]
+ v2 = ["common_utils/v2", "scheduler/v2", "common_types/v2"]
+ dummy_connector = ["api_models/dummy_connector", "hyperswitch_interfaces/dummy_connector"]
+diff --git a/crates/router/Cargo.toml b/crates/router/Cargo.toml
+index 6cb1269e880..c1710d8f2f4 100644
+--- a/crates/router/Cargo.toml
++++ b/crates/router/Cargo.toml
+@@ -17,7 +17,7 @@ email = ["external_services/email", "scheduler/email", "olap"]
+ # keymanager_create, keymanager_mtls, encryption_service should not be removed or added to default feature. Once this features were enabled it can't be disabled as these are breaking changes.
+ keymanager_create = []
+ keymanager_mtls = ["reqwest/rustls-tls", "common_utils/keymanager_mtls"]
+-encryption_service = ["keymanager_create", "hyperswitch_domain_models/encryption_service", "common_utils/encryption_service"]
++encryption_service = ["keymanager_create", "hyperswitch_domain_models/encryption_service", "common_utils/encryption_service", "subscriptions/encryption_service", "payment_methods/encryption_service"]
+ km_forward_x_request_id = ["common_utils/km_forward_x_request_id"]
+ frm = ["api_models/frm", "hyperswitch_domain_models/frm", "hyperswitch_connectors/frm", "hyperswitch_interfaces/frm"]
+ stripe = []
+@@ -121,7 +121,7 @@ analytics = { version = "0.1.0", path = "../analytics", optional = true, default
+ api_models = { version = "0.1.0", path = "../api_models", features = ["errors", "control_center_theme"] }
+ cards = { version = "0.1.0", path = "../cards" }
+ common_enums = { version = "0.1.0", path = "../common_enums" }
+-common_utils = { version = "0.1.0", path = "../common_utils", features = ["signals", "async_ext", "logs", "metrics", "keymanager", "encryption_service"] }
++common_utils = { version = "0.1.0", path = "../common_utils", features = ["signals", "async_ext", "logs", "metrics", "keymanager"] }
+ common_types = { version = "0.1.0", path = "../common_types" }
+ currency_conversion = { version = "0.1.0", path = "../currency_conversion" }
+ diesel_models = { version = "0.1.0", path = "../diesel_models", features = ["kv_store", "tokenization_v2"], default-features = false }
+diff --git a/crates/subscriptions/Cargo.toml b/crates/subscriptions/Cargo.toml
+index 08da62a4788..368d06b2488 100644
+--- a/crates/subscriptions/Cargo.toml
++++ b/crates/subscriptions/Cargo.toml
+@@ -17,7 +17,7 @@ time = { version = "0.3.41", features = ["serde", "std"] }
+ api_models = { version = "0.1.0", path = "../api_models", features = ["errors", "control_center_theme"] }
+ common_types = { version = "0.1.0", path = "../common_types" }
+ common_enums = { version = "0.1.0", path = "../common_enums" }
+-common_utils = { version = "0.1.0", path = "../common_utils", features = ["signals", "async_ext", "logs", "metrics", "keymanager", "encryption_service"] }
++common_utils = { version = "0.1.0", path = "../common_utils", features = ["signals", "async_ext", "logs", "metrics", "keymanager"] }
+ hyperswitch_domain_models = { version = "0.1.0", path = "../hyperswitch_domain_models", default-features = false }
+ router_env = { version = "0.1.0", path = "../router_env", features = ["log_extra_implicit_fields", "log_custom_entries_to_extra"] }
+ scheduler = { version = "0.1.0", path = "../scheduler", default-features = false }
+@@ -29,5 +29,6 @@ workspace = true
+ 
+ [features]
+ default = ["v1"]
++encryption_service = ["common_utils/encryption_service"]
+ v1 = ["hyperswitch_domain_models/v1", "storage_impl/v1", "common_utils/v1", "scheduler/v1", "common_types/v1"]
+ v2 = ["common_utils/v2", "scheduler/v2", "common_types/v2"]
+
+From f6789d24278f048fcd4abcad8cce4f34fc57fae9 Mon Sep 17 00:00:00 2001
+From: Mani Chandra Dulam <mani.dchandra@juspay.in>
+Date: Fri, 9 Jan 2026 20:26:52 +0530
+Subject: [PATCH 4/6] refactor: add log when encryption service is disabled in
+ transfer and create functions
+
+---
+ crates/common_utils/src/keymanager.rs | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/crates/common_utils/src/keymanager.rs b/crates/common_utils/src/keymanager.rs
+index 8f3612d352a..a203ae7664d 100644
+--- a/crates/common_utils/src/keymanager.rs
++++ b/crates/common_utils/src/keymanager.rs
+@@ -237,6 +237,10 @@ pub async fn create_key_in_key_manager(
+     request_body: EncryptionCreateRequest,
+ ) -> errors::CustomResult<Option<DataKeyCreateResponse>, errors::KeyManagerError> {
+     if !state.is_encryption_service_enabled() {
++        logger::info!(
++            "Encryption service is disabled, skipping key transfer for identifier: {:?}",
++            request_body.identifier
++        );
+         Ok(None)
+     } else {
+         call_encryption_service(state, Method::POST, "key/create", request_body)
+@@ -253,6 +257,10 @@ pub async fn transfer_key_to_key_manager(
+     request_body: EncryptionTransferRequest,
+ ) -> errors::CustomResult<Option<DataKeyCreateResponse>, errors::KeyManagerError> {
+     if !state.is_encryption_service_enabled() {
++        logger::info!(
++            "Encryption service is disabled, skipping key transfer for identifier: {:?}",
++            request_body.identifier
++        );
+         Ok(None)
+     } else {
+         call_encryption_service(state, Method::POST, "key/transfer", request_body)
+
+From 02cdb8ac128d835a09d1f82bbe32d9b93db6feed Mon Sep 17 00:00:00 2001
+From: Mani Chandra Dulam <mani.dchandra@juspay.in>
+Date: Mon, 12 Jan 2026 19:21:12 +0530
+Subject: [PATCH 5/6] refactor: modify the log in create key
+
+---
+ crates/common_utils/src/keymanager.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/common_utils/src/keymanager.rs b/crates/common_utils/src/keymanager.rs
+index a203ae7664d..94495d3cf2e 100644
+--- a/crates/common_utils/src/keymanager.rs
++++ b/crates/common_utils/src/keymanager.rs
+@@ -238,7 +238,7 @@ pub async fn create_key_in_key_manager(
+ ) -> errors::CustomResult<Option<DataKeyCreateResponse>, errors::KeyManagerError> {
+     if !state.is_encryption_service_enabled() {
+         logger::info!(
+-            "Encryption service is disabled, skipping key transfer for identifier: {:?}",
++            "Encryption service is disabled, skipping key creation for identifier: {:?}",
+             request_body.identifier
+         );
+         Ok(None)
+
+From da1f8ccf1cb1350ab30fa8e6614fa40828d15f7f Mon Sep 17 00:00:00 2001
+From: Mani Chandra Dulam <mani.dchandra@juspay.in>
+Date: Mon, 19 Jan 2026 13:33:06 +0530
+Subject: [PATCH 6/6] refactor: use cfg! macro instead of if
+
+---
+ crates/common_utils/src/types/keymanager.rs | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/crates/common_utils/src/types/keymanager.rs b/crates/common_utils/src/types/keymanager.rs
+index a28a6e600a7..aa9e89be1d0 100644
+--- a/crates/common_utils/src/types/keymanager.rs
++++ b/crates/common_utils/src/types/keymanager.rs
+@@ -94,14 +94,7 @@ impl KeyManagerState {
+     }
+ 
+     pub fn is_encryption_service_enabled(&self) -> bool {
+-        #[cfg(feature = "encryption_service")]
+-        {
+-            self.enabled
+-        }
+-        #[cfg(not(feature = "encryption_service"))]
+-        {
+-            false
+-        }
++        cfg!(feature = "encryption_service") && self.enabled
+     }
+ }
+ 

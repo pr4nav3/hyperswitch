@@ -1,0 +1,134 @@
+{
+  "row_index": 33,
+  "repo": "juspay/hyperswitch",
+  "pr_number": "12130",
+  "base_sha": "a7c50bb3e09b5f647fada43d5f086db951bdfe9b",
+  "head_sha": "a2cff372510a8846206497106dca4097466516cc",
+  "model": "litellm/open-large",
+  "status": "ok",
+  "output_dir": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/results_full_40tasks/row_0033_pr_12130",
+  "worktree": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0033_pr_12130",
+  "agent_attempts": 2,
+  "agent_empty_patch_retries": 1,
+  "agent_returncode": 0,
+  "agent_elapsed_seconds": 260.19,
+  "has_patch": false,
+  "num_changed_files": 0,
+  "changed_files": [],
+  "file_f1": 0.0,
+  "file_recall": 0.0,
+  "added_line_f1": 0.0,
+  "removed_line_f1": 0.0,
+  "style_score": 0.0,
+  "compilation_summary": {
+    "passed": 1,
+    "total": 2,
+    "all_passed": false
+  },
+  "review_available": true,
+  "judge_count": 8,
+  "judge_aggregate": {
+    "judge_count": 8,
+    "valid_judges": 8,
+    "raw_scores": {
+      "correctness": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "completeness": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "convention_adherence": [
+        10.0,
+        10.0,
+        10.0,
+        5.0,
+        10.0,
+        5.0,
+        10.0,
+        0.0
+      ],
+      "hygiene": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        8.0,
+        10.0,
+        0.0
+      ],
+      "overall": [
+        3.5,
+        3.5,
+        3.5,
+        2.5,
+        3.5,
+        2.2,
+        3.5,
+        0.0
+      ]
+    },
+    "mean": {
+      "correctness": 0.0,
+      "completeness": 0.0,
+      "convention_adherence": 7.5,
+      "hygiene": 8.5,
+      "overall": 2.775
+    },
+    "std_dev": {
+      "correctness": 0.0,
+      "completeness": 0.0,
+      "convention_adherence": 3.78,
+      "hygiene": 3.505,
+      "overall": 1.238
+    },
+    "median": {
+      "correctness": 0.0,
+      "completeness": 0.0,
+      "convention_adherence": 10.0,
+      "hygiene": 10.0,
+      "overall": 3.5
+    },
+    "outliers_excluded": {
+      "correctness": [],
+      "completeness": [],
+      "convention_adherence": [],
+      "hygiene": [
+        6,
+        2
+      ],
+      "overall": [
+        2
+      ]
+    },
+    "outlier_explanations": {
+      "correctness": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [0.0, 0.0].",
+      "completeness": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [0.0, 0.0].",
+      "convention_adherence": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [-2.5, 17.5].",
+      "hygiene": "Excluded 2 outlier(s): judge 6 scored 8.0 (low), judge 2 scored 0.0 (low). Bounds: [8.75, 10.75] computed from IQR with multiplier 1.5.",
+      "overall": "Excluded 1 outlier(s): judge 2 scored 0.0 (low). Bounds: [0.81, 5.11] computed from IQR with multiplier 1.5."
+    },
+    "final_score": {
+      "correctness": 0.0,
+      "completeness": 0.0,
+      "convention_adherence": 7.5,
+      "hygiene": 10.0,
+      "overall": 3.171
+    }
+  },
+  "elapsed_seconds": 1468.87
+}

@@ -1,0 +1,64 @@
+From c9b5c9099448150382688b01670935b4f81a292e Mon Sep 17 00:00:00 2001
+From: Nithin N <57832822+Nithin1506200@users.noreply.github.com>
+Date: Fri, 28 Nov 2025 19:59:03 +0530
+Subject: [PATCH] fix(nuvei): 3ds for base64 padding issue in prod (#10476)
+
+---
+ crates/common_utils/src/consts.rs                     | 3 +++
+ crates/hyperswitch_connectors/src/connectors/nuvei.rs | 2 +-
+ crates/hyperswitch_connectors/src/utils.rs            | 8 +++++++-
+ 3 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/crates/common_utils/src/consts.rs b/crates/common_utils/src/consts.rs
+index e2681057f9f..27c894aa600 100644
+--- a/crates/common_utils/src/consts.rs
++++ b/crates/common_utils/src/consts.rs
+@@ -93,6 +93,9 @@ pub const CELL_IDENTIFIER_LENGTH: u8 = 5;
+ 
+ /// General purpose base64 engine
+ pub const BASE64_ENGINE: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
++/// General purpose base64 engine standard nopad
++pub const BASE64_ENGINE_STD_NO_PAD: base64::engine::GeneralPurpose =
++    base64::engine::general_purpose::STANDARD_NO_PAD;
+ 
+ /// URL Safe base64 engine
+ pub const BASE64_ENGINE_URL_SAFE: base64::engine::GeneralPurpose =
+diff --git a/crates/hyperswitch_connectors/src/connectors/nuvei.rs b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+index 1be74a50396..c15d73a9a2d 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nuvei.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+@@ -1390,7 +1390,7 @@ impl ConnectorRedirectResponse for Nuvei {
+                     let redirect_response: nuvei::NuveiRedirectionResponse =
+                         payload.parse_value("NuveiRedirectionResponse").switch()?;
+                     let acs_response: nuvei::NuveiACSResponse =
+-                        utils::base64_decode(redirect_response.cres.expose())?
++                        utils::safe_base64_decode(redirect_response.cres.expose())?
+                             .as_slice()
+                             .parse_struct("NuveiACSResponse")
+                             .switch()?;
+diff --git a/crates/hyperswitch_connectors/src/utils.rs b/crates/hyperswitch_connectors/src/utils.rs
+index 5565579af82..a56c37dfe66 100644
+--- a/crates/hyperswitch_connectors/src/utils.rs
++++ b/crates/hyperswitch_connectors/src/utils.rs
+@@ -37,7 +37,7 @@ use common_enums::{
+     },
+ };
+ use common_utils::{
+-    consts::BASE64_ENGINE,
++    consts::{BASE64_ENGINE, BASE64_ENGINE_STD_NO_PAD},
+     errors::{CustomResult, ParsingError, ReportSwitchExt},
+     ext_traits::{OptionExt, StringExt, ValueExt},
+     id_type,
+@@ -136,6 +136,12 @@ pub(crate) fn base64_decode(data: String) -> Result<Vec<u8>, Error> {
+         .decode(data)
+         .change_context(errors::ConnectorError::ResponseDeserializationFailed)
+ }
++pub(crate) fn safe_base64_decode(data: String) -> Result<Vec<u8>, Error> {
++    [&BASE64_ENGINE, &BASE64_ENGINE_STD_NO_PAD]
++        .iter()
++        .find_map(|d| d.decode(&data).ok())
++        .ok_or(errors::ConnectorError::ResponseDeserializationFailed.into())
++}
+ 
+ pub(crate) fn to_currency_base_unit(
+     amount: i64,

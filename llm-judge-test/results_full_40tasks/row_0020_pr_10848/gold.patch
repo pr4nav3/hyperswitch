@@ -1,0 +1,68 @@
+From 238e0a5aff052841d56a9f3f82c7301a11ff183c Mon Sep 17 00:00:00 2001
+From: Anurag Thakur <anurag.thakur@juspay.in>
+Date: Wed, 7 Jan 2026 05:39:39 +0530
+Subject: [PATCH] fix(external_services): Mask sender_email
+
+---
+ crates/external_services/src/email.rs      | 2 +-
+ crates/external_services/src/email/ses.rs  | 4 ++--
+ crates/external_services/src/email/smtp.rs | 4 ++--
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/crates/external_services/src/email.rs b/crates/external_services/src/email.rs
+index 82a0da7cb9b..3913be31b7c 100644
+--- a/crates/external_services/src/email.rs
++++ b/crates/external_services/src/email.rs
+@@ -151,7 +151,7 @@ pub struct EmailSettings {
+     pub allowed_unverified_days: i64,
+ 
+     /// Sender email
+-    pub sender_email: String,
++    pub sender_email: pii::Email,
+ 
+     #[serde(flatten)]
+     /// The client specific configurations
+diff --git a/crates/external_services/src/email/ses.rs b/crates/external_services/src/email/ses.rs
+index bc813b7d644..a4c81e291e9 100644
+--- a/crates/external_services/src/email/ses.rs
++++ b/crates/external_services/src/email/ses.rs
+@@ -19,7 +19,7 @@ use crate::email::{EmailClient, EmailError, EmailResult, EmailSettings, Intermed
+ /// Client for AWS SES operation
+ #[derive(Debug, Clone)]
+ pub struct AwsSes {
+-    sender: String,
++    sender: pii::Email,
+     ses_config: SESConfig,
+     settings: EmailSettings,
+ }
+@@ -222,7 +222,7 @@ impl EmailClient for AwsSes {
+ 
+         email_client
+             .send_email()
+-            .from_email_address(self.sender.to_owned())
++            .from_email_address(self.sender.peek())
+             .destination(
+                 Destination::builder()
+                     .to_addresses(recipient.peek())
+diff --git a/crates/external_services/src/email/smtp.rs b/crates/external_services/src/email/smtp.rs
+index 33ab89f4571..1ec6c7d832b 100644
+--- a/crates/external_services/src/email/smtp.rs
++++ b/crates/external_services/src/email/smtp.rs
+@@ -17,7 +17,7 @@ use crate::email::{EmailClient, EmailError, EmailResult, EmailSettings, Intermed
+ #[derive(Debug, Clone, Default, serde::Deserialize)]
+ pub struct SmtpServer {
+     /// sender email id
+-    pub sender: String,
++    pub sender: pii::Email,
+     /// SMTP server specific configs
+     pub smtp_config: SmtpServerConfig,
+ }
+@@ -156,7 +156,7 @@ impl EmailClient for SmtpServer {
+ 
+         let email = Message::builder()
+             .to(Self::to_mail_box(recipient.peek().to_string())?)
+-            .from(Self::to_mail_box(self.sender.clone())?)
++            .from(Self::to_mail_box(self.sender.peek().to_string())?)
+             .subject(subject)
+             .header(ContentType::TEXT_HTML)
+             .body(body)

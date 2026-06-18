@@ -1,0 +1,384 @@
+[
+  {
+    "reasoning": "The agent produced an entirely empty diff with zero file modifications. As a result, none of the two major task objectives were addressed. First, the 3DS setup-mandate webhook routing fix was completely missed: the webhook ARes handler still unconditionally routes external authentication completions through the standard Authorize flow instead of branching to SetupMandate for setup-mandate payments, and the redirect-based completion handler still contains the duplicated inline setup-mandate detection logic instead of using a centralized helper. Second, none of the Rust 1.95.0 clippy lint resolutions were applied across analytics, connector transformers, storage implementations, or supporting modules. Because the patch is empty, there are no introduced correctness bugs, convention violations, or hygiene issues—the codebase simply remains in the same broken state it was before. The compilation check passed only because the base commit compiles unchanged; the rustfmt failure is an unrelated environmental issue. The completeness and correctness scores reflect the total absence of any implementation effort.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add centralized is_setup_mandate() helper on PaymentIntent",
+        "evidence": "No changes in crates/hyperswitch_domain_models/src/payments.rs; the impl PaymentIntent block ends without the helper method."
+      },
+      {
+        "requirement": "Update webhook ARes handler to route setup-mandate payments through SetupMandate flow",
+        "evidence": "No changes in crates/router/src/core/webhooks/incoming.rs; the external_authentication_incoming_webhook_flow still unconditionally uses payments_core::<api::Authorize, ...> with no setup-mandate branch."
+      },
+      {
+        "requirement": "Deduplicate setup-mandate detection in redirect completion handler",
+        "evidence": "No changes in crates/router/src/core/payments.rs; PaymentAuthenticateCompleteAuthorize still computes is_setup_mandate inline with amount == MinorUnit::zero() && setup_future_usage checks."
+      },
+      {
+        "requirement": "Resolve Rust 1.95.0 clippy lints across analytics, connectors, storage, and supporting modules",
+        "evidence": "No changes in crates/analytics/src, crates/diesel_models/src, crates/euclid/src, crates/hyperswitch_connectors/src, crates/redis_interface/src, crates/router/src/core/payment_methods/tokenize.rs, crates/router/src/core/payments.rs, or crates/storage_impl/src; all manual reverse sorts, manual index increments, and redundant temporaries remain untouched."
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  },
+  {
+    "reasoning": "The agent produced an entirely empty patch with zero file modifications. As confirmed by the prior review assessment and the compilation results (cargo_check_affected passed only because nothing was changed), none of the required fixes were implemented. The first requirement—centralizing setup-mandate detection in a single helper and routing both redirect and webhook completion paths through it—was completely ignored, leaving the webhook handler unconditionally routing all ARes events through the Authorize flow. The second requirement—resolving Rust 1.95.0 clippy warnings across analytics, connectors, storage, and supporting modules—was also entirely unaddressed. Because no code was written, there are no introduced logic bugs or convention violations, and the diff is trivially clean. However, the absence of any implementation yields the minimum possible scores for correctness and completeness.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add is_setup_mandate() helper to PaymentIntent to centralize setup-mandate detection",
+        "evidence": "No changes in crates/hyperswitch_domain_models/src/payments.rs"
+      },
+      {
+        "requirement": "Update redirect completion handler to use shared is_setup_mandate() helper instead of inline logic",
+        "evidence": "No changes in crates/router/src/core/payments.rs; inline amount/setup_future_usage check remains"
+      },
+      {
+        "requirement": "Update webhook ARes handler to lookup payment intent and route setup-mandate payments through SetupMandate flow",
+        "evidence": "No changes in crates/router/src/core/webhooks/incoming.rs; unconditional payments_core::<Authorize> call remains"
+      },
+      {
+        "requirement": "Fix clippy lints in analytics modules (latency checked_div, accumulator sort_by_key patterns)",
+        "evidence": "No changes in crates/analytics/"
+      },
+      {
+        "requirement": "Fix clippy lint in diesel_models process_tracker query (rename x, use sort_by_key)",
+        "evidence": "No changes in crates/diesel_models/src/query/process_tracker.rs"
+      },
+      {
+        "requirement": "Fix clippy lint in euclid state_machine manual index increment",
+        "evidence": "No changes in crates/euclid/src/dssa/state_machine.rs"
+      },
+      {
+        "requirement": "Fix clippy lints in bankofamerica, barclaycard, and wellsfargo transformers (manual counter loops)",
+        "evidence": "No changes in crates/hyperswitch_connectors/src/connectors/"
+      },
+      {
+        "requirement": "Fix clippy lints in redis_interface commands, router tokenize, and storage_impl",
+        "evidence": "No changes in crates/redis_interface/src/commands.rs, crates/router/src/core/payment_methods/tokenize.rs, or crates/storage_impl/"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  },
+  {
+    "reasoning": "The agent submitted an empty diff, so zero files were modified. This means the core webhook routing bug remains: the ARes webhook handler in incoming.rs still unconditionally routes external 3DS completions through the Authorize flow instead of branching to SetupMandate for setup-mandate payments. The shared detection helper is_setup_mandate() was never added to PaymentIntent, and the redirect completion handler still duplicates inline detection logic. Additionally, none of the Rust 1.95.0 clippy fixes across analytics, connectors, storage, and supporting modules were applied. Because the patch is empty, correctness and completeness are both zero—no task requirement was fulfilled. There are no new convention violations or hygiene issues introduced by the agent (no changed lines, no extraneous files), so convention_adherence and hygiene score maximally, though this is only vacuously true.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add shared is_setup_mandate() helper on PaymentIntent",
+        "evidence": "crates/hyperswitch_domain_models/src/payments.rs unchanged; no helper method introduced"
+      },
+      {
+        "requirement": "Update redirect completion handler to use shared helper instead of inline detection",
+        "evidence": "crates/router/src/core/payments.rs retains inline amount/setup_future_usage check at lines 3906-3908"
+      },
+      {
+        "requirement": "Fix webhook ARes handler to route setup-mandate payments through SetupMandate flow",
+        "evidence": "crates/router/src/core/webhooks/incoming.rs still only calls payments_core::<Authorize,...> with no setup-mandate branch"
+      },
+      {
+        "requirement": "Resolve Rust 1.95.0 clippy warnings across analytics, connectors, storage, and supporting modules",
+        "evidence": "Analytics accumulator manual sort_by, process_tracker unclear variable name, euclid manual index increment, connector manual counter loops, and storage_impl manual sort_by all remain unmodified"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent produced a completely empty patch with zero file modifications, as confirmed by both the diff output and the prior review assessment. Consequently, none of the required changes were implemented. The core task was to fix 3DS setup-mandate webhook routing by introducing a shared `is_setup_mandate()` helper on `PaymentIntent` and updating both the redirect completion handler and the webhook ARes handler to use it. None of this was done. The webhook handler in `incoming.rs` still unconditionally routes external-authentication completions through the `Authorize` flow, which will incorrectly process setup-mandate payments. The secondary task was to resolve Rust 1.95.0 clippy warnings across analytics, connector transformers, storage implementations, and supporting modules. Every instance identified in the reference patch remains unaddressed, including manual reverse sorts, manual index increments in loops, unclear variable names, and redundant temporaries. Because no code was written, no convention violations were introduced; however, no conventions were followed either since the implementation is entirely absent. The patch is perfectly hygienic—there are no unrelated changes, formatting churn, or extraneous files—but this is trivially true for an empty diff. In summary, the agent failed to implement any part of either requirement, and the existing bugs and clippy warnings persist exactly as they were before.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 5.0,
+    "hygiene": 10.0,
+    "overall": 2.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/webhooks/incoming.rs",
+        "issue": "ARes webhook handler unconditionally routes external-authentication completions through Authorize flow instead of branching to SetupMandate for setup-mandate payments",
+        "evidence": "Lines 2433-2453 show only `payments::payments_core::<api::Authorize, ...>` with no setup-mandate branch or intent lookup before routing"
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Redirect completion handler duplicates inline setup-mandate detection instead of using a shared helper",
+        "evidence": "Lines 3906-3908: `let is_setup_mandate = payment_intent.amount == MinorUnit::zero() && payment_intent.setup_future_usage == Some(storage_enums::FutureUsage::OffSession);`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Add shared `is_setup_mandate()` helper method on `PaymentIntent` to centralize detection logic",
+        "evidence": "No method added after line 381 in `crates/hyperswitch_domain_models/src/payments.rs`"
+      },
+      {
+        "requirement": "Update webhook ARes handler to lookup payment intent and branch to SetupMandate flow when `is_setup_mandate()` is true",
+        "evidence": "`crates/router/src/core/webhooks/incoming.rs` still contains only the Authorize path with no setup-mandate conditional"
+      },
+      {
+        "requirement": "Update redirect completion handler to call `payment_intent.is_setup_mandate()` instead of inline amount/setup_future_usage check",
+        "evidence": "`crates/router/src/core/payments.rs` lines 3906-3908 retain the inline duplication"
+      },
+      {
+        "requirement": "Resolve clippy lints in analytics accumulators (manual reverse sort_by)",
+        "evidence": "`crates/analytics/src/payments/accumulator.rs` line 128 and `crates/analytics/src/refunds/accumulator.rs` lines 101, 144 still use `sort_by(|a, b| b.count.cmp(&a.count))`"
+      },
+      {
+        "requirement": "Resolve clippy lint in diesel_models process tracker query (unclear variable name `x` and manual sort)",
+        "evidence": "`crates/diesel_models/src/query/process_tracker.rs` line 102 still uses `let mut x: Vec<Self> = ...` with `x.sort_by(...)`"
+      },
+      {
+        "requirement": "Resolve clippy lint in euclid state machine (manual index increment)",
+        "evidence": "`crates/euclid/src/dssa/state_machine.rs` lines 90-100 still use `let mut machine_idx = start_idx; for cond in condition { ... machine_idx += 1; }`"
+      },
+      {
+        "requirement": "Resolve clippy lints in connector transformers (manual counter while iterating BTreeMap)",
+        "evidence": "`crates/hyperswitch_connectors/src/connectors/bankofamerica/transformers.rs`, `barclaycard/transformers.rs`, and `wellsfargo/transformers.rs` still use `let mut iter = 1; for (key, value) in hashmap { ... iter += 1; }`"
+      },
+      {
+        "requirement": "Resolve clippy lints in storage_impl payment_attempt queries (manual reverse sort_by on modified_at)",
+        "evidence": "`crates/storage_impl/src/payments/payment_attempt.rs` lines 1323, 1396, 1469 still use `sort_by(|a, b| b.modified_at.cmp(&a.modified_at))`"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  },
+  {
+    "reasoning": "The agent submitted a completely empty diff with zero file modifications, failing to implement any aspect of the two-part task. The first requirement—introducing a shared PaymentIntent::is_setup_mandate() helper and routing both the redirect completion and webhook ARes paths through the SetupMandate flow when applicable—was entirely absent. The second requirement—resolving Rust 1.95.0 clippy lints across analytics, connector transformers, storage implementations, and supporting modules—was also entirely absent. Because no code was added, removed, or altered, the patch contains no introduced logic bugs, convention violations, or hygiene issues. Correctness and completeness are scored at the minimum because the required behavioral and lint-fix changes simply do not exist. Convention adherence and hygiene remain maximal by default since no undesirable patterns or extraneous modifications were introduced.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add PaymentIntent::is_setup_mandate() helper to centralize setup-mandate detection",
+        "evidence": "crates/hyperswitch_domain_models/src/payments.rs unchanged; no is_setup_mandate method added"
+      },
+      {
+        "requirement": "Update webhook ARes handler to lookup intent and route setup-mandate payments via SetupMandate instead of Authorize",
+        "evidence": "crates/router/src/core/webhooks/incoming.rs unchanged; unconditional Authorize flow remains"
+      },
+      {
+        "requirement": "Update redirect completion handler to use is_setup_mandate() instead of inline amount/setup_future_usage check",
+        "evidence": "crates/router/src/core/payments.rs unchanged; inline detection logic remains duplicated"
+      },
+      {
+        "requirement": "Fix clippy lints in analytics accumulators (sort_by with reverse cmp to sort_by_key)",
+        "evidence": "crates/analytics/src/payments/accumulator.rs and refunds/accumulator.rs unchanged"
+      },
+      {
+        "requirement": "Fix clippy lints in diesel_models process_tracker query (unclear variable x, sort/truncate)",
+        "evidence": "crates/diesel_models/src/query/process_tracker.rs unchanged"
+      },
+      {
+        "requirement": "Fix clippy lints in euclid state_machine (manual index increment over iterable)",
+        "evidence": "crates/euclid/src/dssa/state_machine.rs unchanged"
+      },
+      {
+        "requirement": "Fix clippy lints in bankofamerica/barclaycard/wellsfargo transformers (manual counter increment)",
+        "evidence": "Connector transformer files unchanged"
+      },
+      {
+        "requirement": "Fix clippy lints in storage_impl and redis_interface (idiomatic iterators/extend)",
+        "evidence": "crates/storage_impl/src/merchant_account.rs, payment_attempt.rs, and redis_interface/src/commands.rs unchanged"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  },
+  {
+    "reasoning": "The agent produced an entirely empty patch with zero file modifications. I verified the working tree with git diff --stat HEAD, which returned no output. Consequently, none of the task requirements were addressed. The core 3DS setup-mandate webhook routing bug remains: the ARes handler in incoming.rs still unconditionally invokes payments_core::<api::Authorize,...> without checking whether the payment is a setup-mandate, meaning setup-mandate completions are incorrectly routed through the standard authorization flow. The shared is_setup_mandate() helper that should centralize detection logic is absent from PaymentIntent. Additionally, all Rust 1.95.0 clippy lint fixes across analytics, connectors, storage, and supporting modules were left untouched. cargo_check_affected passed only because no files were modified. Correctness and completeness scores are at the minimum because the patch is empty and the original bugs persist. Convention and hygiene are middling-to-good solely because no bad code was introduced, but that is trivial when nothing was written.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 5.0,
+    "hygiene": 8.0,
+    "overall": 2.2,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/webhooks/incoming.rs",
+        "issue": "ARes webhook handler unconditionally routes all external-authentication completions through the Authorize flow. Setup-mandate payments are incorrectly processed as standard authorizations with no intent lookup or is_setup_mandate branch.",
+        "evidence": "Lines 2426-2453 show only `payments::payments_core::<api::Authorize, ...>` with no setup-mandate conditional."
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Redirect completion handler still duplicates inline setup-mandate detection logic instead of delegating to a shared helper.",
+        "evidence": "Lines 3906-3908: `let is_setup_mandate = payment_intent.amount == MinorUnit::zero() && payment_intent.setup_future_usage == Some(storage_enums::FutureUsage::OffSession);`"
+      },
+      {
+        "file": "crates/hyperswitch_domain_models/src/payments.rs",
+        "issue": "Missing the is_setup_mandate() helper method that should centralize setup-mandate detection for reuse across completion paths.",
+        "evidence": "impl PaymentIntent block ends at line 381 without the is_setup_mandate method."
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Add shared is_setup_mandate() helper on PaymentIntent to centralize setup-mandate detection.",
+        "evidence": "Method is absent; both completion paths still inline the check."
+      },
+      {
+        "requirement": "Update webhook ARes handler to look up payment_intent and branch to SetupMandate when is_setup_mandate() is true.",
+        "evidence": "incoming.rs lines 2426-2453 only show Authorize path; no intent fetch or branch."
+      },
+      {
+        "requirement": "Update redirect completion handler to use the shared helper instead of inline logic.",
+        "evidence": "payments.rs lines 3906-3908 still inline amount == MinorUnit::zero() && setup_future_usage == OffSession."
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints across analytics accumulator files (sort_by -> sort_by_key).",
+        "evidence": "analytics/src/payments/accumulator.rs line 128 and refunds/accumulator.rs lines 101-141 still use manual reverse sort_by."
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints in diesel_models process_tracker query (rename variable x, simplify sort/truncate).",
+        "evidence": "diesel_models/src/query/process_tracker.rs line 102 still uses `let mut x` and manual sort_by."
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints in euclid state_machine (manual index increment).",
+        "evidence": "euclid/src/dssa/state_machine.rs lines 90-100 still use `machine_idx += 1` in a loop."
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints in connector transformers (bankofamerica, barclaycard, wellsfargo manual counter).",
+        "evidence": "bankofamerica/transformers.rs lines 710-718 still use `let mut iter = 1` and increment in a BTreeMap loop."
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints in storage_impl payment_attempt (sort_by -> sort_by_key on modified_at).",
+        "evidence": "storage_impl/src/payments/payment_attempt.rs lines 1323, 1396, 1469 still use `sort_by(|a, b| b.modified_at.cmp(&a.modified_at))`."
+      },
+      {
+        "requirement": "Apply minor clippy fixes in router core (clone on profile_id, zip without into_iter).",
+        "evidence": "router/src/core/payments.rs line 3872 still missing .clone(); router/src/core/payment_methods/tokenize.rs and storage_impl files still use `.into_iter()` in zip."
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  },
+  {
+    "reasoning": "The agent produced a completely empty patch with zero file modifications, failing both major task components entirely. First, the 3DS setup-mandate webhook routing fix was not implemented: the shared is_setup_mandate() helper was not added to PaymentIntent, the webhook ARes handler in incoming.rs still unconditionally routes all completions through the Authorize flow (missing the SetupMandate branch), and the redirect completion handler in payments.rs retains its duplicated inline detection logic. Second, none of the Rust 1.95.0 clippy lint resolutions were applied across analytics, connector transformers, storage implementations, or supporting modules. Evidence from direct inspection confirms these deficiencies: payments.rs line 381 ends the PaymentIntent impl block without is_setup_mandate(), incoming.rs lines 2426-2453 show only a single Authorize branch with no intent lookup or setup-mandate routing, and payments.rs line 3906 still shows the inline amount/setup_future_usage check. The compilation check passed solely because nothing was modified (cargo_check_affected rc=0 on the unchanged base), while the rustfmt failure is an environmental toolchain issue unrelated to the agent's non-existent changes. Since no code was written, no new convention violations or hygiene issues were introduced; however, this does not compensate for the total absence of required functionality.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Add shared is_setup_mandate() helper to PaymentIntent in hyperswitch_domain_models",
+        "evidence": "crates/hyperswitch_domain_models/src/payments.rs ends impl PaymentIntent at line 381 with no is_setup_mandate method"
+      },
+      {
+        "requirement": "Update webhook ARes handler to detect setup-mandate and route to SetupMandate flow",
+        "evidence": "crates/router/src/core/webhooks/incoming.rs lines 2426-2453 only calls payments_core::<api::Authorize> with no setup-mandate branch"
+      },
+      {
+        "requirement": "Update redirect completion handler to use shared helper instead of duplicated inline check",
+        "evidence": "crates/router/src/core/payments.rs line 3906 still has inline `payment_intent.amount == MinorUnit::zero() && payment_intent.setup_future_usage == Some(storage_enums::FutureUsage::OffSession)`"
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints in analytics accumulators",
+        "evidence": "crates/analytics/src/payments/accumulator.rs line 128 still uses `sort_by(|a, b| b.count.cmp(&a.count))`"
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints in connector transformers",
+        "evidence": "bankofamerica, barclaycard, and wellsfargo transformers retain manual counter increments inside BTreeMap loops"
+      },
+      {
+        "requirement": "Address Rust 1.95.0 clippy lints in storage and diesel models",
+        "evidence": "crates/diesel_models/src/query/process_tracker.rs and crates/storage_impl/src/payments/payment_attempt.rs retain manual reverse sort_by patterns"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  },
+  {
+    "reasoning": "The agent produced a completely empty patch with zero file modifications. I verified the codebase state directly: (1) crates/hyperswitch_domain_models/src/payments.rs lacks the `is_setup_mandate()` helper method that should centralize setup-mandate detection; the `impl PaymentIntent` block ends at line 381 with no such method. (2) crates/router/src/core/webhooks/incoming.rs lines 2426-2453 show the ARes webhook handler unconditionally routing all external-authentication completions through `payments_core::<api::Authorize, ...>` with no intent lookup, no setup-mandate branch, and no call to the shared helper. (3) crates/router/src/core/payments.rs lines 3906-3908 still contain the duplicated inline detection `payment_intent.amount == MinorUnit::zero() && payment_intent.setup_future_usage == Some(storage_enums::FutureUsage::OffSession)` instead of delegating to a helper. (4) All Rust 1.95.0 clippy lint fixes are missing across the entire codebase: analytics accumulator files still use `sort_by(|a, b| b.count.cmp(&a.count))` instead of `sort_by_key`, diesel_models/process_tracker.rs still uses the unclear variable `x` and manual sort/truncate, euclid/src/dssa/state_machine.rs still manually increments `machine_idx` in a loop, hyperswitch_connectors (bankofamerica, barclaycard, wells Fargo) still use manual `iter += 1` counters over BTreeMaps, and storage_impl/src/payments/payment_attempt.rs still uses manual reverse `sort_by`. The compilation check passed only because nothing was changed; the rustfmt failure is environmental and unrelated. Since no requirements were addressed, the scores are minimal across all dimensions.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 0.0,
+    "hygiene": 0.0,
+    "overall": 0.0,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/webhooks/incoming.rs",
+        "issue": "ARes webhook handler unconditionally routes all external-authentication completions through the Authorize flow; setup-mandate payments are incorrectly processed as standard authorizations with no SetupMandate branch",
+        "evidence": "Lines 2433-2453: only `payments::payments_core::<api::Authorize, ...>` is called; no `is_setup_mandate` check or `api::SetupMandate` branch exists"
+      },
+      {
+        "file": "crates/router/src/core/payments.rs",
+        "issue": "Redirect completion handler duplicates inline setup-mandate detection logic instead of using a shared helper",
+        "evidence": "Lines 3906-3908: `let is_setup_mandate = payment_intent.amount == MinorUnit::zero() && payment_intent.setup_future_usage == Some(storage_enums::FutureUsage::OffSession);`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Add is_setup_mandate() helper method on PaymentIntent to centralize setup-mandate detection",
+        "evidence": "crates/hyperswitch_domain_models/src/payments.rs: impl PaymentIntent block ends at line 381 with no is_setup_mandate method present"
+      },
+      {
+        "requirement": "Update webhook ARes handler to look up payment intent and route setup-mandate payments through SetupMandate flow",
+        "evidence": "crates/router/src/core/webhooks/incoming.rs: no payment_intent lookup before routing, only Authorize path exists"
+      },
+      {
+        "requirement": "Update redirect completion handler to use shared is_setup_mandate() helper instead of inline duplication",
+        "evidence": "crates/router/src/core/payments.rs: still uses inline amount/setup_future_usage check"
+      },
+      {
+        "requirement": "Fix clippy lint: use sort_by_key with Reverse in analytics payments accumulator",
+        "evidence": "crates/analytics/src/payments/accumulator.rs line 128: `self.error_vec.sort_by(|a, b| b.count.cmp(&a.count));` unchanged"
+      },
+      {
+        "requirement": "Fix clippy lint: use sort_by_key with Reverse in analytics refunds accumulator",
+        "evidence": "crates/analytics/src/refunds/accumulator.rs line 101: `self.refund_reason_vec.sort_by(|a, b| b.count.cmp(&a.count));` unchanged"
+      },
+      {
+        "requirement": "Fix clippy lint: clarify variable name and use sort_by_key in diesel_models process_tracker",
+        "evidence": "crates/diesel_models/src/query/process_tracker.rs line 102: `let mut x: Vec<Self> = ...` and manual `x.sort_by(|a, b| a.schedule_time.cmp(&b.schedule_time))` unchanged"
+      },
+      {
+        "requirement": "Fix clippy lint: use iterator zip instead of manual index increment in euclid state_machine",
+        "evidence": "crates/euclid/src/dssa/state_machine.rs lines 90-100: `let mut machine_idx = start_idx; for cond in condition { ... machine_idx += 1; }` unchanged"
+      },
+      {
+        "requirement": "Fix clippy lint: use iterator zip/map/collect instead of manual counter in bankofamerica transformers",
+        "evidence": "crates/hyperswitch_connectors/src/connectors/bankofamerica/transformers.rs lines 710-718: manual `let mut iter = 1; for (key, value) in hashmap { ... iter += 1; }` unchanged"
+      },
+      {
+        "requirement": "Fix clippy lint: use sort_by_key with Reverse in storage_impl payment_attempt",
+        "evidence": "crates/storage_impl/src/payments/payment_attempt.rs line 1323: `payment_attempts.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));` unchanged"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  }
+]

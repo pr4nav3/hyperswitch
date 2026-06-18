@@ -1,0 +1,114 @@
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index 0f98861cc0..e9e03b5ebd 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -7167,9 +7167,9 @@ key1 = "TokenEx ID"
+ 
+ [gigadat]
+ [gigadat.connector_auth.SignatureKey]
+-api_key = "Username"
+-api_secret = "Password"
+-key1 = "Compaign Id"
++api_key = "Access Token"
++api_secret = "Security Token"
++key1 = "Campaign ID"
+ [[gigadat.bank_redirect]]
+ payment_method_type = "interac"
+ [gigadat.metadata.site]
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index aea8277906..b250a4683e 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -5904,9 +5904,9 @@ api_key = "API Key"
+ 
+ [gigadat]
+ [gigadat.connector_auth.SignatureKey]
+-api_key = "Username"
+-api_secret = "Password"
+-key1 = "Compaign Id"
++api_key = "Access Token"
++api_secret = "Security Token"
++key1 = "Campaign ID"
+ [[gigadat.bank_redirect]]
+ payment_method_type = "interac"
+ [gigadat.metadata.site]
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index f7c7ed3e99..161b5da75c 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -7145,9 +7145,9 @@ api_key = "API Key"
+ 
+ [gigadat]
+ [gigadat.connector_auth.SignatureKey]
+-api_key = "Username"
+-api_secret = "Password"
+-key1 = "Compaign Id"
++api_key = "Access Token"
++api_secret = "Security Token"
++key1 = "Campaign ID"
+ [[gigadat.bank_redirect]]
+ payment_method_type = "interac"
+ [gigadat.metadata.site]
+diff --git a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+index d87bb6374e..7a5d722ec8 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+@@ -67,6 +67,7 @@ pub struct GigadatCpiRequest {
+     pub transaction_id: String,
+     #[serde(rename = "type")]
+     pub transaction_type: GidadatTransactionType,
++    pub sandbox: bool,
+     pub name: Secret<String>,
+     pub email: Email,
+     pub mobile: Secret<String>,
+@@ -95,7 +96,10 @@ impl TryFrom<&GigadatRouterData<&PaymentsAuthorizeRouterData>> for GigadatCpiReq
+                 let email = router_data.get_billing_email()?;
+                 let mobile = router_data.get_billing_phone_number()?;
+                 let currency = item.router_data.request.currency;
+-
++                let sandbox = match item.router_data.test_mode {
++                    Some(true) => true,
++                    Some(false) | None => false,
++                };
+                 let user_ip = router_data.request.get_browser_info()?.get_ip_address()?;
+ 
+                 Ok(Self {
+@@ -107,6 +111,7 @@ impl TryFrom<&GigadatRouterData<&PaymentsAuthorizeRouterData>> for GigadatCpiReq
+                     transaction_id: router_data.connector_request_reference_id.clone(),
+                     transaction_type: GidadatTransactionType::Cpi,
+                     name,
++                    sandbox,
+                     email,
+                     mobile,
+                 })
+@@ -126,8 +131,8 @@ impl TryFrom<&GigadatRouterData<&PaymentsAuthorizeRouterData>> for GigadatCpiReq
+ #[derive(Debug, Clone)]
+ pub struct GigadatAuthType {
+     pub campaign_id: Secret<String>,
+-    pub username: Secret<String>,
+-    pub password: Secret<String>,
++    pub access_token: Secret<String>,
++    pub security_token: Secret<String>,
+ }
+ 
+ impl TryFrom<&ConnectorAuthType> for GigadatAuthType {
+@@ -140,8 +145,8 @@ impl TryFrom<&ConnectorAuthType> for GigadatAuthType {
+                 key1,
+                 api_secret,
+             } => Ok(Self {
+-                password: api_secret.to_owned(),
+-                username: api_key.to_owned(),
++                security_token: api_secret.to_owned(),
++                access_token: api_key.to_owned(),
+                 campaign_id: key1.to_owned(),
+             }),
+             _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),
+@@ -206,7 +211,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, GigadatPaymentResponse, T, PaymentsResp
+         let base_url = CONNECTOR_BASE_URL;
+ 
+         let redirect_url = format!(
+-            "{}/webflow?transaction={}&token={}",
++            "{}webflow?transaction={}&token={}",
+             base_url,
+             item.data.connector_request_reference_id,
+             item.response.token.peek()

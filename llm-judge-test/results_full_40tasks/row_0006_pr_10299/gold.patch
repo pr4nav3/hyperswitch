@@ -1,0 +1,166 @@
+From 9a570dcd52ee38a7b850916437a2abe1859e7409 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Mon, 17 Nov 2025 10:20:11 +0530
+Subject: [PATCH 1/3] fix(connector): update connector status
+
+---
+ crates/hyperswitch_connectors/src/connectors/aci.rs           | 2 +-
+ crates/hyperswitch_connectors/src/connectors/amazonpay.rs     | 2 +-
+ crates/hyperswitch_connectors/src/connectors/calida.rs        | 2 +-
+ crates/hyperswitch_connectors/src/connectors/finix.rs         | 2 +-
+ crates/hyperswitch_connectors/src/connectors/gigadat.rs       | 2 +-
+ crates/hyperswitch_connectors/src/connectors/loonio.rs        | 2 +-
+ crates/hyperswitch_connectors/src/connectors/nuvei.rs         | 2 +-
+ crates/hyperswitch_connectors/src/connectors/peachpayments.rs | 2 +-
+ 8 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/aci.rs b/crates/hyperswitch_connectors/src/connectors/aci.rs
+index 96c3a059c22..412d394da48 100644
+--- a/crates/hyperswitch_connectors/src/connectors/aci.rs
++++ b/crates/hyperswitch_connectors/src/connectors/aci.rs
+@@ -1171,7 +1171,7 @@ static ACI_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     description:
+         "ACI Payments delivers secure, real-time electronic payment solutions for businesses, banks, and governments, enabling seamless transactions across channels.",
+     connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-    integration_status: enums::ConnectorIntegrationStatus::Beta,
++    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
+ };
+ 
+ static ACI_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];
+diff --git a/crates/hyperswitch_connectors/src/connectors/amazonpay.rs b/crates/hyperswitch_connectors/src/connectors/amazonpay.rs
+index e6d51f3c574..23d6631e945 100644
+--- a/crates/hyperswitch_connectors/src/connectors/amazonpay.rs
++++ b/crates/hyperswitch_connectors/src/connectors/amazonpay.rs
+@@ -767,7 +767,7 @@ static AMAZONPAY_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Amazon Pay",
+     description: "Amazon Pay is an Alternative Payment Method (APM) connector that allows merchants to accept payments using customers' stored Amazon account details, providing a seamless checkout experience.",
+     connector_type: enums::HyperswitchConnectorCategory::AlternativePaymentMethod,
+-    integration_status: enums::ConnectorIntegrationStatus::Alpha,
++    integration_status: enums::ConnectorIntegrationStatus::Beta,
+ };
+ 
+ static AMAZONPAY_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];
+diff --git a/crates/hyperswitch_connectors/src/connectors/calida.rs b/crates/hyperswitch_connectors/src/connectors/calida.rs
+index 82066c81f55..ba6b3e5d909 100644
+--- a/crates/hyperswitch_connectors/src/connectors/calida.rs
++++ b/crates/hyperswitch_connectors/src/connectors/calida.rs
+@@ -744,7 +744,7 @@ static CALIDA_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Calida",
+     description: "Calida Financial is a licensed e-money institution based in Malta and they provide customized financial infrastructure and payment solutions across the EU and EEA. As part of The Payments Group, it focuses on embedded finance, prepaid services, and next-generation digital payment products.",
+     connector_type: enums::HyperswitchConnectorCategory::AlternativePaymentMethod,
+-    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
++    integration_status: enums::ConnectorIntegrationStatus::Live,
+ };
+ 
+ static CALIDA_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 1] = [enums::EventClass::Payments];
+diff --git a/crates/hyperswitch_connectors/src/connectors/finix.rs b/crates/hyperswitch_connectors/src/connectors/finix.rs
+index 7be29a39813..831a3aa7932 100644
+--- a/crates/hyperswitch_connectors/src/connectors/finix.rs
++++ b/crates/hyperswitch_connectors/src/connectors/finix.rs
+@@ -1084,7 +1084,7 @@ static FINIX_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Finix",
+     description: "Finix is a payments technology provider enabling businesses to accept and send payments online or in person",
+     connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-    integration_status: ConnectorIntegrationStatus::Alpha,
++    integration_status: ConnectorIntegrationStatus::Sandbox,
+ };
+ 
+ static FINIX_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];
+diff --git a/crates/hyperswitch_connectors/src/connectors/gigadat.rs b/crates/hyperswitch_connectors/src/connectors/gigadat.rs
+index bb430fda344..bc423e3951b 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gigadat.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gigadat.rs
+@@ -1067,7 +1067,7 @@ lazy_static! {
+         display_name: "Gigadat",
+         description: "Gigadat is a financial services product that offers a single API for payment integration. It provides Canadian businesses with a secure payment gateway and various pay-in and pay-out solutions, including Interac e-Transfer",
+         connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-        integration_status: enums::ConnectorIntegrationStatus::Sandbox,
++        integration_status: enums::ConnectorIntegrationStatus::Live,
+     };
+     static ref GIGADAT_SUPPORTED_WEBHOOK_FLOWS: Vec<enums::EventClass> = {
+         #[cfg(feature = "payouts")]
+diff --git a/crates/hyperswitch_connectors/src/connectors/loonio.rs b/crates/hyperswitch_connectors/src/connectors/loonio.rs
+index 0d4a6acba5c..99542391041 100644
+--- a/crates/hyperswitch_connectors/src/connectors/loonio.rs
++++ b/crates/hyperswitch_connectors/src/connectors/loonio.rs
+@@ -846,7 +846,7 @@ lazy_static! {
+         display_name: "Loonio",
+         description: "Loonio is a payment processing platform that provides APIs for deposits and payouts via methods like Interac, PIX, EFT, and credit cards, with webhook support and transaction sync for real-time and manual status tracking.",
+         connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-        integration_status: enums::ConnectorIntegrationStatus::Sandbox,
++        integration_status: enums::ConnectorIntegrationStatus::Live,
+     };
+     static ref LOONIO_SUPPORTED_WEBHOOK_FLOWS: Vec<enums::EventClass> = vec![
+         enums::EventClass::Payments,
+diff --git a/crates/hyperswitch_connectors/src/connectors/nuvei.rs b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+index 3569db19378..b3dd853eda6 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nuvei.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+@@ -1567,7 +1567,7 @@ static NUVEI_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+         display_name: "Nuvei",
+         description: "Nuvei is the Canadian fintech company accelerating the business of clients around the world.",
+         connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-        integration_status: enums::ConnectorIntegrationStatus::Beta,
++        integration_status: enums::ConnectorIntegrationStatus::Live,
+     };
+ 
+ static NUVEI_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 2] =
+diff --git a/crates/hyperswitch_connectors/src/connectors/peachpayments.rs b/crates/hyperswitch_connectors/src/connectors/peachpayments.rs
+index d319f25b0b2..564e7a4c0a4 100644
+--- a/crates/hyperswitch_connectors/src/connectors/peachpayments.rs
++++ b/crates/hyperswitch_connectors/src/connectors/peachpayments.rs
+@@ -820,7 +820,7 @@ static PEACHPAYMENTS_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Peach Payments",
+     description: "The secure African payment gateway with easy integrations, 365-day support, and advanced orchestration.",
+     connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-    integration_status: enums::ConnectorIntegrationStatus::Beta,
++    integration_status: enums::ConnectorIntegrationStatus::Live,
+ };
+ 
+ static PEACHPAYMENTS_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 1] =
+
+From 337f5446cd82155e5e6ad695f37df0535f2065ae Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Mon, 17 Nov 2025 10:54:55 +0530
+Subject: [PATCH 2/3] connector status
+
+---
+ crates/hyperswitch_connectors/src/connectors/payload.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/payload.rs b/crates/hyperswitch_connectors/src/connectors/payload.rs
+index 3967736fd06..9ca166a27a9 100644
+--- a/crates/hyperswitch_connectors/src/connectors/payload.rs
++++ b/crates/hyperswitch_connectors/src/connectors/payload.rs
+@@ -917,7 +917,7 @@ static PAYLOAD_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Payload",
+     description: "Payload is an embedded finance solution for modern platforms and businesses, automating inbound and outbound payments with an industry-leading platform and driving innovation into the future.",
+     connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-    integration_status: enums::ConnectorIntegrationStatus::Alpha,
++    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
+ };
+ 
+ static PAYLOAD_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 3] = [
+
+From f9b42a5720a19c3309b99e2adf918eb27206e918 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Mon, 17 Nov 2025 12:19:24 +0530
+Subject: [PATCH 3/3] update
+
+---
+ crates/hyperswitch_connectors/src/connectors/dwolla.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/dwolla.rs b/crates/hyperswitch_connectors/src/connectors/dwolla.rs
+index 3b52832d2f7..9cd83ca887d 100644
+--- a/crates/hyperswitch_connectors/src/connectors/dwolla.rs
++++ b/crates/hyperswitch_connectors/src/connectors/dwolla.rs
+@@ -984,7 +984,7 @@ static DWOLLA_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Dwolla",
+     description: "Dwolla is a multinational financial technology company offering financial services and software as a service (SaaS)",
+     connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-    integration_status: enums::ConnectorIntegrationStatus::Beta,
++    integration_status: enums::ConnectorIntegrationStatus::Sandbox,
+ };
+ 
+ static DWOLLA_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 2] =

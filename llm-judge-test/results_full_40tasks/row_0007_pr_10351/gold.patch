@@ -1,0 +1,806 @@
+From 2d7df952d420d7955c81e4e86daa697a0ffab0c9 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 19 Nov 2025 17:38:20 +0530
+Subject: [PATCH 1/8] tesouro mandate
+
+---
+ .../src/payment_method_data.rs                | 120 +++++++++++-------
+ crates/router/src/core/payments/helpers.rs    |  30 ++++-
+ .../payments/operations/payment_confirm.rs    |  16 ++-
+ .../payments/operations/payment_create.rs     |   1 +
+ .../payments/operations/payment_response.rs   |   5 +
+ .../payments/operations/payment_update.rs     |   9 +-
+ .../router/src/core/payments/tokenization.rs  |  14 +-
+ 7 files changed, 134 insertions(+), 61 deletions(-)
+
+diff --git a/crates/hyperswitch_domain_models/src/payment_method_data.rs b/crates/hyperswitch_domain_models/src/payment_method_data.rs
+index 117099aef6a..16475e7ae32 100644
+--- a/crates/hyperswitch_domain_models/src/payment_method_data.rs
++++ b/crates/hyperswitch_domain_models/src/payment_method_data.rs
+@@ -20,6 +20,8 @@ use masking::{ExposeInterface, PeekInterface, Secret};
+ use serde::{Deserialize, Serialize};
+ use time::Date;
+ 
++use crate::router_data::PaymentMethodToken;
++
+ // We need to derive Serialize and Deserialize because some parts of payment method data are being
+ // stored in the database as serde_json::Value
+ #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+@@ -2319,56 +2321,76 @@ impl From<Card> for ExtendedCardInfo {
+     }
+ }
+ 
+-impl From<ApplePayWalletData> for payment_methods::PaymentMethodDataWalletInfo {
+-    fn from(item: ApplePayWalletData) -> Self {
+-        let (card_exp_month, card_exp_year) = match item
+-            .payment_data
+-            .get_decrypted_apple_pay_payment_data_optional()
+-        {
+-            Some(token) => (
+-                Some(token.application_expiration_month.clone()),
+-                Some(token.application_expiration_year.clone()),
+-            ),
+-            None => (None, None),
+-        };
+-        Self {
+-            last4: item
+-                .payment_method
+-                .display_name
+-                .chars()
+-                .rev()
+-                .take(4)
+-                .collect::<Vec<_>>()
+-                .into_iter()
+-                .rev()
+-                .collect(),
+-            card_network: item.payment_method.network,
+-            card_type: Some(item.payment_method.pm_type),
+-            card_exp_month,
+-            card_exp_year,
+-        }
+-    }
+-}
+-
+-impl From<GooglePayWalletData> for payment_methods::PaymentMethodDataWalletInfo {
+-    fn from(item: GooglePayWalletData) -> Self {
+-        let (card_exp_month, card_exp_year) = match item
+-            .tokenization_data
+-            .get_decrypted_google_pay_payment_data_optional()
+-        {
+-            Some(token) => (
+-                Some(token.card_exp_month.clone()),
+-                Some(token.card_exp_year.clone()),
+-            ),
+-            None => (None, None),
+-        };
+-        Self {
+-            last4: item.info.card_details,
+-            card_network: item.info.card_network,
+-            card_type: Some(item.pm_type),
+-            card_exp_month,
+-            card_exp_year,
++pub fn get_applepay_wallet_info(
++    item: ApplePayWalletData,
++    payment_method_token: Option<PaymentMethodToken>,
++) -> payment_methods::PaymentMethodDataWalletInfo {
++    let (card_exp_month, card_exp_year) = match item
++        .payment_data
++        .get_decrypted_apple_pay_payment_data_optional()
++    {
++        Some(token) => (
++            Some(token.application_expiration_month.clone()),
++            Some(token.application_expiration_year.clone()),
++        ),
++        None => {
++            if let Some(PaymentMethodToken::ApplePayDecrypt(token)) = payment_method_token {
++                (
++                    Some(token.application_expiration_month.clone()),
++                    Some(token.application_expiration_year.clone()),
++                )
++            } else {
++                (None, None)
++            }
++        }
++    };
++    payment_methods::PaymentMethodDataWalletInfo {
++        last4: item
++            .payment_method
++            .display_name
++            .chars()
++            .rev()
++            .take(4)
++            .collect::<Vec<_>>()
++            .into_iter()
++            .rev()
++            .collect(),
++        card_network: item.payment_method.network,
++        card_type: Some(item.payment_method.pm_type),
++        card_exp_month,
++        card_exp_year,
++    }
++}
++
++pub fn get_googlepay_wallet_info(
++    item: GooglePayWalletData,
++    payment_method_token: Option<PaymentMethodToken>,
++) -> payment_methods::PaymentMethodDataWalletInfo {
++    let (card_exp_month, card_exp_year) = match item
++        .tokenization_data
++        .get_decrypted_google_pay_payment_data_optional()
++    {
++        Some(token) => (
++            Some(token.card_exp_month.clone()),
++            Some(token.card_exp_year.clone()),
++        ),
++        None => {
++            if let Some(PaymentMethodToken::GooglePayDecrypt(token)) = payment_method_token {
++                (
++                    Some(token.card_exp_month.clone()),
++                    Some(token.card_exp_year.clone()),
++                )
++            } else {
++                (None, None)
++            }
+         }
++    };
++    payment_methods::PaymentMethodDataWalletInfo {
++        last4: item.info.card_details,
++        card_network: item.info.card_network,
++        card_type: Some(item.pm_type),
++        card_exp_month,
++        card_exp_year,
+     }
+ }
+ 
+diff --git a/crates/router/src/core/payments/helpers.rs b/crates/router/src/core/payments/helpers.rs
+index dc8a7ad4151..4ce567eaad8 100644
+--- a/crates/router/src/core/payments/helpers.rs
++++ b/crates/router/src/core/payments/helpers.rs
+@@ -44,7 +44,7 @@ use hyperswitch_domain_models::{
+         self as domain_payments, payment_attempt::PaymentAttempt,
+         payment_intent::PaymentIntentFetchConstraints, PaymentIntent,
+     },
+-    router_data::{InteracCustomerInfo, KlarnaSdkResponse},
++    router_data::{InteracCustomerInfo, KlarnaSdkResponse, PaymentMethodToken},
+ };
+ pub use hyperswitch_interfaces::{
+     api::ConnectorSpecifications,
+@@ -5057,6 +5057,7 @@ pub async fn get_additional_payment_data(
+     pm_data: &domain::PaymentMethodData,
+     db: &dyn StorageInterface,
+     profile_id: &id_type::ProfileId,
++    payment_method_token: Option<&PaymentMethodToken>,
+ ) -> Result<
+     Option<api_models::payments::AdditionalPaymentData>,
+     error_stack::Report<errors::ApiErrorResponse>,
+@@ -5305,8 +5306,20 @@ pub async fn get_additional_payment_data(
+                         Some(token.application_expiration_month.clone()),
+                         Some(token.application_expiration_year.clone()),
+                     ),
+-                    None => (None, None),
++                    None => {
++                        if let Some(PaymentMethodToken::ApplePayDecrypt(token)) =
++                            payment_method_token
++                        {
++                            (
++                                Some(token.application_expiration_month.clone()),
++                                Some(token.application_expiration_year.clone()),
++                            )
++                        } else {
++                            (None, None)
++                        }
++                    }
+                 };
++
+                 Ok(Some(api_models::payments::AdditionalPaymentData::Wallet {
+                     apple_pay: Some(Box::new(api_models::payments::ApplepayPaymentMethod {
+                         display_name: apple_pay_wallet_data.payment_method.display_name.clone(),
+@@ -5328,7 +5341,18 @@ pub async fn get_additional_payment_data(
+                         Some(token.card_exp_month.clone()),
+                         Some(token.card_exp_year.clone()),
+                     ),
+-                    None => (None, None),
++                    None => {
++                        if let Some(PaymentMethodToken::GooglePayDecrypt(token)) =
++                            payment_method_token
++                        {
++                            (
++                                Some(token.card_exp_month.clone()),
++                                Some(token.card_exp_year.clone()),
++                            )
++                        } else {
++                            (None, None)
++                        }
++                    }
+                 };
+                 Ok(Some(api_models::payments::AdditionalPaymentData::Wallet {
+                     apple_pay: None,
+diff --git a/crates/router/src/core/payments/operations/payment_confirm.rs b/crates/router/src/core/payments/operations/payment_confirm.rs
+index 758d63726f9..f7647835eb4 100644
+--- a/crates/router/src/core/payments/operations/payment_confirm.rs
++++ b/crates/router/src/core/payments/operations/payment_confirm.rs
+@@ -497,6 +497,7 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentData<F>, api::PaymentsRequest>
+                             &payment_method_data.into(),
+                             store.as_ref(),
+                             &profile_id,
++                            None,
+                         )
+                         .await
+                     })
+@@ -1836,13 +1837,22 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentData<F>, api::PaymentsRequest> for
+             .payment_method_data
+             .as_ref()
+             .async_map(|payment_method_data| async {
+-                helpers::get_additional_payment_data(payment_method_data, &*state.store, profile_id)
+-                    .await
++                helpers::get_additional_payment_data(
++                    payment_method_data,
++                    &*state.store,
++                    profile_id,
++                    payment_data.payment_method_token.as_ref(),
++                )
++                .await
+             })
+             .await
+             .transpose()?
+             .flatten();
+-
++        println!(
++            "nittt 333333 {:?} {:?}",
++            serde_json::to_string(&additional_pm_data),
++            serde_json::to_string(&payment_data.payment_method_token)
++        );
+         let encoded_additional_pm_data = additional_pm_data
+             .as_ref()
+             .map(Encode::encode_to_value)
+diff --git a/crates/router/src/core/payments/operations/payment_create.rs b/crates/router/src/core/payments/operations/payment_create.rs
+index f7a4be399c7..910d6cd0a00 100644
+--- a/crates/router/src/core/payments/operations/payment_create.rs
++++ b/crates/router/src/core/payments/operations/payment_create.rs
+@@ -1183,6 +1183,7 @@ impl PaymentCreate {
+                     &payment_method_data.into(),
+                     &*state.store,
+                     &profile_id,
++                    None,
+                 )
+                 .await
+             })
+diff --git a/crates/router/src/core/payments/operations/payment_response.rs b/crates/router/src/core/payments/operations/payment_response.rs
+index ddf93d51c2e..2e153e21dd8 100644
+--- a/crates/router/src/core/payments/operations/payment_response.rs
++++ b/crates/router/src/core/payments/operations/payment_response.rs
+@@ -210,6 +210,7 @@ impl<F: Send + Clone> PostUpdateTracker<F, PaymentData<F>, types::PaymentsAuthor
+             merchant_connector_id.clone(),
+             vault_operation.clone(),
+             payment_method_info.clone(),
++            payment_data.payment_method_token.clone(),
+         ));
+ 
+         let is_connector_mandate = resp.request.customer_acceptance.is_some()
+@@ -307,6 +308,8 @@ impl<F: Send + Clone> PostUpdateTracker<F, PaymentData<F>, types::PaymentsAuthor
+             let payment_method_billing_address = payment_method_billing_address.cloned();
+ 
+             let cloned_merchant_context = merchant_context.clone();
++            let payment_method_token = payment_data.payment_method_token.clone();
++
+             logger::info!("Call to save_payment_method in locker");
+             let _task_handle = tokio::spawn(
+                 async move {
+@@ -326,6 +329,7 @@ impl<F: Send + Clone> PostUpdateTracker<F, PaymentData<F>, types::PaymentsAuthor
+                         merchant_connector_id.clone(),
+                         vault_operation.clone(),
+                         payment_method_info.clone(),
++                        payment_method_token.clone(),
+                     ))
+                     .await;
+ 
+@@ -1290,6 +1294,7 @@ impl<F: Clone> PostUpdateTracker<F, PaymentData<F>, types::SetupMandateRequestDa
+             merchant_connector_id.clone(),
+             vault_operation,
+             payment_method_info,
++            payment_data.payment_method_token.clone(),
+         ))
+         .await?;
+ 
+diff --git a/crates/router/src/core/payments/operations/payment_update.rs b/crates/router/src/core/payments/operations/payment_update.rs
+index 09ab0c173b0..194316b77f4 100644
+--- a/crates/router/src/core/payments/operations/payment_update.rs
++++ b/crates/router/src/core/payments/operations/payment_update.rs
+@@ -790,8 +790,13 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentData<F>, api::PaymentsRequest> for
+             .payment_method_data
+             .as_ref()
+             .async_map(|payment_method_data| async {
+-                helpers::get_additional_payment_data(payment_method_data, &*state.store, profile_id)
+-                    .await
++                helpers::get_additional_payment_data(
++                    payment_method_data,
++                    &*state.store,
++                    profile_id,
++                    payment_data.payment_method_token.as_ref(),
++                )
++                .await
+             })
+             .await
+             .transpose()?
+diff --git a/crates/router/src/core/payments/tokenization.rs b/crates/router/src/core/payments/tokenization.rs
+index 2c9371450d0..76d663d71c3 100644
+--- a/crates/router/src/core/payments/tokenization.rs
++++ b/crates/router/src/core/payments/tokenization.rs
+@@ -128,6 +128,7 @@ pub async fn save_payment_method<FData>(
+     merchant_connector_id: Option<id_type::MerchantConnectorAccountId>,
+     vault_operation: Option<hyperswitch_domain_models::payments::VaultOperation>,
+     payment_method_info: Option<domain::PaymentMethod>,
++    payment_method_token: Option<hyperswitch_domain_models::router_data::PaymentMethodToken>,
+ ) -> RouterResult<SavePaymentMethodDataResponse>
+ where
+     FData: mandate::MandateBehaviour + Clone,
+@@ -230,6 +231,10 @@ where
+                 };
+ 
+             let pm_id = if customer_acceptance.is_some() {
++                use hyperswitch_domain_models::payment_method_data::{
++                    get_applepay_wallet_info, get_googlepay_wallet_info,
++                };
++
+                 let payment_method_data =
+                     save_payment_method_data.request.get_payment_method_data();
+                 let payment_method_create_request =
+@@ -298,14 +303,15 @@ where
+                     (
+                         _,
+                         domain::PaymentMethodData::Wallet(domain::WalletData::ApplePay(applepay)),
+-                    ) => Some(PaymentMethodsData::WalletDetails(
+-                        PaymentMethodDataWalletInfo::from(applepay),
+-                    )),
++                    ) => Some(PaymentMethodsData::WalletDetails(get_applepay_wallet_info(
++                        applepay,
++                        payment_method_token.clone(),
++                    ))),
+                     (
+                         _,
+                         domain::PaymentMethodData::Wallet(domain::WalletData::GooglePay(googlepay)),
+                     ) => Some(PaymentMethodsData::WalletDetails(
+-                        PaymentMethodDataWalletInfo::from(googlepay),
++                        get_googlepay_wallet_info(googlepay, payment_method_token),
+                     )),
+                     _ => None,
+                 };
+
+From 8e21552da94757b54df1e6988cd23955f38f01d4 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 19 Nov 2025 17:46:39 +0530
+Subject: [PATCH 2/8] update
+
+---
+ .../router/src/core/payments/operations/payment_confirm.rs  | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/crates/router/src/core/payments/operations/payment_confirm.rs b/crates/router/src/core/payments/operations/payment_confirm.rs
+index f7647835eb4..ad6cc190d4e 100644
+--- a/crates/router/src/core/payments/operations/payment_confirm.rs
++++ b/crates/router/src/core/payments/operations/payment_confirm.rs
+@@ -1848,11 +1848,7 @@ impl<F: Clone + Sync> UpdateTracker<F, PaymentData<F>, api::PaymentsRequest> for
+             .await
+             .transpose()?
+             .flatten();
+-        println!(
+-            "nittt 333333 {:?} {:?}",
+-            serde_json::to_string(&additional_pm_data),
+-            serde_json::to_string(&payment_data.payment_method_token)
+-        );
++
+         let encoded_additional_pm_data = additional_pm_data
+             .as_ref()
+             .map(Encode::encode_to_value)
+
+From 3060b0215a367500ff127d3336439aa444dac087 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Thu, 20 Nov 2025 10:39:52 +0530
+Subject: [PATCH 3/8] update
+
+---
+ crates/router/src/core/payments/tokenization.rs | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/crates/router/src/core/payments/tokenization.rs b/crates/router/src/core/payments/tokenization.rs
+index 76d663d71c3..667d1c2661b 100644
+--- a/crates/router/src/core/payments/tokenization.rs
++++ b/crates/router/src/core/payments/tokenization.rs
+@@ -3,9 +3,7 @@ use std::collections::HashMap;
+ use ::payment_methods::controller::PaymentMethodsController;
+ #[cfg(feature = "v1")]
+ use api_models::payment_methods::PaymentMethodsData;
+-use api_models::{
+-    payment_methods::PaymentMethodDataWalletInfo, payments::ConnectorMandateReferenceId,
+-};
++use api_models::payments::ConnectorMandateReferenceId;
+ use common_enums::{ConnectorMandateStatus, PaymentMethod};
+ use common_types::callback_mapper::CallbackMapperData;
+ use common_utils::{
+
+From 2f9ec203ae86057656ca5575fc5bf601be56e259 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Fri, 21 Nov 2025 12:13:49 +0530
+Subject: [PATCH 4/8] update
+
+---
+ .../src/payment_method_data.rs                | 52 +++++++---------
+ crates/router/src/core/payments/helpers.rs    | 60 ++++++++-----------
+ .../router/src/core/payments/tokenization.rs  | 10 ++--
+ 3 files changed, 52 insertions(+), 70 deletions(-)
+
+diff --git a/crates/hyperswitch_domain_models/src/payment_method_data.rs b/crates/hyperswitch_domain_models/src/payment_method_data.rs
+index 16475e7ae32..3063b6a0922 100644
+--- a/crates/hyperswitch_domain_models/src/payment_method_data.rs
++++ b/crates/hyperswitch_domain_models/src/payment_method_data.rs
+@@ -2325,24 +2325,20 @@ pub fn get_applepay_wallet_info(
+     item: ApplePayWalletData,
+     payment_method_token: Option<PaymentMethodToken>,
+ ) -> payment_methods::PaymentMethodDataWalletInfo {
+-    let (card_exp_month, card_exp_year) = match item
+-        .payment_data
+-        .get_decrypted_apple_pay_payment_data_optional()
+-    {
+-        Some(token) => (
++    let (card_exp_month, card_exp_year) = match (
++        item.payment_data
++            .get_decrypted_apple_pay_payment_data_optional(),
++        payment_method_token,
++    ) {
++        (Some(token), _) => (
+             Some(token.application_expiration_month.clone()),
+             Some(token.application_expiration_year.clone()),
+         ),
+-        None => {
+-            if let Some(PaymentMethodToken::ApplePayDecrypt(token)) = payment_method_token {
+-                (
+-                    Some(token.application_expiration_month.clone()),
+-                    Some(token.application_expiration_year.clone()),
+-                )
+-            } else {
+-                (None, None)
+-            }
+-        }
++        (None, Some(PaymentMethodToken::ApplePayDecrypt(token))) => (
++            Some(token.application_expiration_month.clone()),
++            Some(token.application_expiration_year.clone()),
++        ),
++        _ => (None, None),
+     };
+     payment_methods::PaymentMethodDataWalletInfo {
+         last4: item
+@@ -2366,24 +2362,20 @@ pub fn get_googlepay_wallet_info(
+     item: GooglePayWalletData,
+     payment_method_token: Option<PaymentMethodToken>,
+ ) -> payment_methods::PaymentMethodDataWalletInfo {
+-    let (card_exp_month, card_exp_year) = match item
+-        .tokenization_data
+-        .get_decrypted_google_pay_payment_data_optional()
+-    {
+-        Some(token) => (
++    let (card_exp_month, card_exp_year) = match (
++        item.tokenization_data
++            .get_decrypted_google_pay_payment_data_optional(),
++        payment_method_token,
++    ) {
++        (Some(token), None) => (
+             Some(token.card_exp_month.clone()),
+             Some(token.card_exp_year.clone()),
+         ),
+-        None => {
+-            if let Some(PaymentMethodToken::GooglePayDecrypt(token)) = payment_method_token {
+-                (
+-                    Some(token.card_exp_month.clone()),
+-                    Some(token.card_exp_year.clone()),
+-                )
+-            } else {
+-                (None, None)
+-            }
+-        }
++        (None, Some(PaymentMethodToken::GooglePayDecrypt(token))) => (
++            Some(token.card_exp_month.clone()),
++            Some(token.card_exp_year.clone()),
++        ),
++        _ => (None, None),
+     };
+     payment_methods::PaymentMethodDataWalletInfo {
+         last4: item.info.card_details,
+diff --git a/crates/router/src/core/payments/helpers.rs b/crates/router/src/core/payments/helpers.rs
+index 4ce567eaad8..7d5be46afda 100644
+--- a/crates/router/src/core/payments/helpers.rs
++++ b/crates/router/src/core/payments/helpers.rs
+@@ -5298,26 +5298,21 @@ pub async fn get_additional_payment_data(
+         },
+         domain::PaymentMethodData::Wallet(wallet) => match wallet {
+             domain::WalletData::ApplePay(apple_pay_wallet_data) => {
+-                let (card_exp_month, card_exp_year) = match apple_pay_wallet_data
+-                    .payment_data
+-                    .get_decrypted_apple_pay_payment_data_optional()
+-                {
+-                    Some(token) => (
++                let (card_exp_month, card_exp_year) = match (
++                    apple_pay_wallet_data
++                        .payment_data
++                        .get_decrypted_apple_pay_payment_data_optional(),
++                    payment_method_token,
++                ) {
++                    (Some(token), _) => (
+                         Some(token.application_expiration_month.clone()),
+                         Some(token.application_expiration_year.clone()),
+                     ),
+-                    None => {
+-                        if let Some(PaymentMethodToken::ApplePayDecrypt(token)) =
+-                            payment_method_token
+-                        {
+-                            (
+-                                Some(token.application_expiration_month.clone()),
+-                                Some(token.application_expiration_year.clone()),
+-                            )
+-                        } else {
+-                            (None, None)
+-                        }
+-                    }
++                    (None, Some(PaymentMethodToken::ApplePayDecrypt(token))) => (
++                        Some(token.application_expiration_month.clone()),
++                        Some(token.application_expiration_year.clone()),
++                    ),
++                    _ => (None, None),
+                 };
+ 
+                 Ok(Some(api_models::payments::AdditionalPaymentData::Wallet {
+@@ -5333,27 +5328,24 @@ pub async fn get_additional_payment_data(
+                 }))
+             }
+             domain::WalletData::GooglePay(google_pay_pm_data) => {
+-                let (card_exp_month, card_exp_year) = match google_pay_pm_data
+-                    .tokenization_data
+-                    .get_decrypted_google_pay_payment_data_optional()
+-                {
+-                    Some(token) => (
++                let (card_exp_month, card_exp_year) = match (
++                    google_pay_pm_data
++                        .tokenization_data
++                        .get_decrypted_google_pay_payment_data_optional(),
++                    payment_method_token,
++                ) {
++                    (Some(token), _) => (
+                         Some(token.card_exp_month.clone()),
+                         Some(token.card_exp_year.clone()),
+                     ),
+-                    None => {
+-                        if let Some(PaymentMethodToken::GooglePayDecrypt(token)) =
+-                            payment_method_token
+-                        {
+-                            (
+-                                Some(token.card_exp_month.clone()),
+-                                Some(token.card_exp_year.clone()),
+-                            )
+-                        } else {
+-                            (None, None)
+-                        }
+-                    }
++                    (None, Some(PaymentMethodToken::GooglePayDecrypt(token))) => (
++                        Some(token.card_exp_month.clone()),
++                        Some(token.card_exp_year.clone()),
++                    ),
++
++                    _ => (None, None),
+                 };
++
+                 Ok(Some(api_models::payments::AdditionalPaymentData::Wallet {
+                     apple_pay: None,
+                     google_pay: Some(Box::new(
+diff --git a/crates/router/src/core/payments/tokenization.rs b/crates/router/src/core/payments/tokenization.rs
+index 667d1c2661b..c8a8b988b54 100644
+--- a/crates/router/src/core/payments/tokenization.rs
++++ b/crates/router/src/core/payments/tokenization.rs
+@@ -1,5 +1,3 @@
+-use std::collections::HashMap;
+-
+ use ::payment_methods::controller::PaymentMethodsController;
+ #[cfg(feature = "v1")]
+ use api_models::payment_methods::PaymentMethodsData;
+@@ -15,6 +13,9 @@ use common_utils::{
+ };
+ use diesel_models::business_profile::ExternalVaultConnectorDetails;
+ use error_stack::{report, ResultExt};
++use hyperswitch_domain_models::payment_method_data::{
++    get_applepay_wallet_info, get_googlepay_wallet_info,
++};
+ #[cfg(feature = "v1")]
+ use hyperswitch_domain_models::{
+     callback_mapper::CallbackMapper,
+@@ -23,6 +24,7 @@ use hyperswitch_domain_models::{
+ };
+ use masking::{ExposeInterface, Secret};
+ use router_env::{instrument, tracing};
++use std::collections::HashMap;
+ 
+ use super::helpers;
+ #[cfg(feature = "v1")]
+@@ -229,10 +231,6 @@ where
+                 };
+ 
+             let pm_id = if customer_acceptance.is_some() {
+-                use hyperswitch_domain_models::payment_method_data::{
+-                    get_applepay_wallet_info, get_googlepay_wallet_info,
+-                };
+-
+                 let payment_method_data =
+                     save_payment_method_data.request.get_payment_method_data();
+                 let payment_method_create_request =
+
+From f9c7deaf511c3cba18f3de43d3eab6e6276e3c97 Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Fri, 21 Nov 2025 09:11:17 +0000
+Subject: [PATCH 5/8] chore: run formatter
+
+---
+ crates/router/src/core/payments/tokenization.rs | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/crates/router/src/core/payments/tokenization.rs b/crates/router/src/core/payments/tokenization.rs
+index 922ee46760e..bd59045af7a 100644
+--- a/crates/router/src/core/payments/tokenization.rs
++++ b/crates/router/src/core/payments/tokenization.rs
+@@ -1,3 +1,5 @@
++use std::collections::HashMap;
++
+ use ::payment_methods::controller::PaymentMethodsController;
+ #[cfg(feature = "v1")]
+ use api_models::payment_methods::PaymentMethodsData;
+@@ -24,7 +26,6 @@ use hyperswitch_domain_models::{
+ };
+ use masking::{ExposeInterface, Secret};
+ use router_env::{instrument, tracing};
+-use std::collections::HashMap;
+ 
+ use super::helpers;
+ #[cfg(feature = "v1")]
+
+From 9dc271060fbfea22921e4cab1b865bbfcc5e772a Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Fri, 21 Nov 2025 16:03:24 +0530
+Subject: [PATCH 6/8] update
+
+---
+ crates/router/src/core/payments/operations/payment_response.rs | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/crates/router/src/core/payments/operations/payment_response.rs b/crates/router/src/core/payments/operations/payment_response.rs
+index c421f878596..fbe881f327f 100644
+--- a/crates/router/src/core/payments/operations/payment_response.rs
++++ b/crates/router/src/core/payments/operations/payment_response.rs
+@@ -305,8 +305,6 @@ impl<F: Send + Clone> PostUpdateTracker<F, PaymentData<F>, types::PaymentsAuthor
+             let business_profile = business_profile.clone();
+             let payment_method_type = resp.request.payment_method_type;
+             let payment_method_billing_address = payment_method_billing_address.cloned();
+-
+-            let cloned_merchant_context = merchant_context.clone();
+             let payment_method_token = payment_data.payment_method_token.clone();
+ 
+             let cloned_platform = platform.clone();
+
+From 510ed9248b077266d486421920b976c58c7aa1be Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Thu, 27 Nov 2025 11:19:21 +0530
+Subject: [PATCH 7/8] made token common for decrypted flows
+
+---
+ .../src/payment_method_data.rs                | 24 +++--------------
+ crates/router/src/core/payments/helpers.rs    | 27 ++++---------------
+ 2 files changed, 9 insertions(+), 42 deletions(-)
+
+diff --git a/crates/hyperswitch_domain_models/src/payment_method_data.rs b/crates/hyperswitch_domain_models/src/payment_method_data.rs
+index 3063b6a0922..b97310f3e99 100644
+--- a/crates/hyperswitch_domain_models/src/payment_method_data.rs
++++ b/crates/hyperswitch_domain_models/src/payment_method_data.rs
+@@ -2325,16 +2325,8 @@ pub fn get_applepay_wallet_info(
+     item: ApplePayWalletData,
+     payment_method_token: Option<PaymentMethodToken>,
+ ) -> payment_methods::PaymentMethodDataWalletInfo {
+-    let (card_exp_month, card_exp_year) = match (
+-        item.payment_data
+-            .get_decrypted_apple_pay_payment_data_optional(),
+-        payment_method_token,
+-    ) {
+-        (Some(token), _) => (
+-            Some(token.application_expiration_month.clone()),
+-            Some(token.application_expiration_year.clone()),
+-        ),
+-        (None, Some(PaymentMethodToken::ApplePayDecrypt(token))) => (
++    let (card_exp_month, card_exp_year) = match payment_method_token {
++        Some(PaymentMethodToken::ApplePayDecrypt(token)) => (
+             Some(token.application_expiration_month.clone()),
+             Some(token.application_expiration_year.clone()),
+         ),
+@@ -2362,16 +2354,8 @@ pub fn get_googlepay_wallet_info(
+     item: GooglePayWalletData,
+     payment_method_token: Option<PaymentMethodToken>,
+ ) -> payment_methods::PaymentMethodDataWalletInfo {
+-    let (card_exp_month, card_exp_year) = match (
+-        item.tokenization_data
+-            .get_decrypted_google_pay_payment_data_optional(),
+-        payment_method_token,
+-    ) {
+-        (Some(token), None) => (
+-            Some(token.card_exp_month.clone()),
+-            Some(token.card_exp_year.clone()),
+-        ),
+-        (None, Some(PaymentMethodToken::GooglePayDecrypt(token))) => (
++    let (card_exp_month, card_exp_year) = match payment_method_token {
++        Some(PaymentMethodToken::GooglePayDecrypt(token)) => (
+             Some(token.card_exp_month.clone()),
+             Some(token.card_exp_year.clone()),
+         ),
+diff --git a/crates/router/src/core/payments/helpers.rs b/crates/router/src/core/payments/helpers.rs
+index 95c10f8ba02..066808f9366 100644
+--- a/crates/router/src/core/payments/helpers.rs
++++ b/crates/router/src/core/payments/helpers.rs
+@@ -5251,20 +5251,12 @@ pub async fn get_additional_payment_data(
+         },
+         domain::PaymentMethodData::Wallet(wallet) => match wallet {
+             domain::WalletData::ApplePay(apple_pay_wallet_data) => {
+-                let (card_exp_month, card_exp_year) = match (
+-                    apple_pay_wallet_data
+-                        .payment_data
+-                        .get_decrypted_apple_pay_payment_data_optional(),
+-                    payment_method_token,
+-                ) {
+-                    (Some(token), _) => (
+-                        Some(token.application_expiration_month.clone()),
+-                        Some(token.application_expiration_year.clone()),
+-                    ),
+-                    (None, Some(PaymentMethodToken::ApplePayDecrypt(token))) => (
++                let (card_exp_month, card_exp_year) = match payment_method_token {
++                    Some(PaymentMethodToken::ApplePayDecrypt(token)) => (
+                         Some(token.application_expiration_month.clone()),
+                         Some(token.application_expiration_year.clone()),
+                     ),
++
+                     _ => (None, None),
+                 };
+ 
+@@ -5281,17 +5273,8 @@ pub async fn get_additional_payment_data(
+                 }))
+             }
+             domain::WalletData::GooglePay(google_pay_pm_data) => {
+-                let (card_exp_month, card_exp_year) = match (
+-                    google_pay_pm_data
+-                        .tokenization_data
+-                        .get_decrypted_google_pay_payment_data_optional(),
+-                    payment_method_token,
+-                ) {
+-                    (Some(token), _) => (
+-                        Some(token.card_exp_month.clone()),
+-                        Some(token.card_exp_year.clone()),
+-                    ),
+-                    (None, Some(PaymentMethodToken::GooglePayDecrypt(token))) => (
++                let (card_exp_month, card_exp_year) = match payment_method_token {
++                    Some(PaymentMethodToken::GooglePayDecrypt(token)) => (
+                         Some(token.card_exp_month.clone()),
+                         Some(token.card_exp_year.clone()),
+                     ),
+
+From 5b187d436817cce53fc43929e61ad55310f7a377 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Thu, 27 Nov 2025 11:23:58 +0530
+Subject: [PATCH 8/8] update
+
+---
+ crates/router/src/core/payments/helpers.rs | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/crates/router/src/core/payments/helpers.rs b/crates/router/src/core/payments/helpers.rs
+index 066808f9366..07488ffd7b9 100644
+--- a/crates/router/src/core/payments/helpers.rs
++++ b/crates/router/src/core/payments/helpers.rs
+@@ -5278,7 +5278,6 @@ pub async fn get_additional_payment_data(
+                         Some(token.card_exp_month.clone()),
+                         Some(token.card_exp_year.clone()),
+                     ),
+-
+                     _ => (None, None),
+                 };
+ 

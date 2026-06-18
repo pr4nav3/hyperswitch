@@ -1,0 +1,79 @@
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index 813075ead3..8ba4f8b77d 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -4451,6 +4451,36 @@ where
+         is_retry_payment,
+         should_continue_further,
+     );
++
++    let mut preprocessing_reference_id = None;
++    if connector
++        .connector_name
++        .is_pre_processing_required_before_authorize()
++    {
++        let preprocessing_result = router_data
++            .preprocessing_steps(state, &connector)
++            .await;
++        match preprocessing_result {
++            Ok(preprocessing_router_data) => {
++                if let Ok(router_types::PaymentsResponseData::TransactionResponse {
++                    resource_id,
++                    ..
++                }) = &preprocessing_router_data.response
++                {
++                    if let router_types::ResponseId::ConnectorTransactionId(id) = resource_id {
++                        preprocessing_reference_id = Some(id.clone());
++                    }
++                }
++                router_data = preprocessing_router_data;
++            }
++            Err(err) => {
++                return Err(err);
++            }
++        }
++    }
++
++    router_data.reference_id = preprocessing_reference_id;
++
+     let should_continue = match router_data
+         .create_order_at_connector(state, &connector, should_continue_further)
+         .await?
+@@ -4828,6 +4858,37 @@ where
+         if matches!(execution_path, ExecutionPath::Direct) {
+             let mut should_continue_further = true;
+ 
++            let mut preprocessing_reference_id = None;
++            if connector
++                .connector_name
++                .is_pre_processing_required_before_authorize()
++            {
++                let preprocessing_result = router_data
++                    .preprocessing_steps(state, &connector)
++                    .await;
++                match preprocessing_result {
++                    Ok(preprocessing_router_data) => {
++                        if let Ok(router_types::PaymentsResponseData::TransactionResponse {
++                            resource_id,
++                            ..
++                        }) = &preprocessing_router_data.response
++                        {
++                            if let router_types::ResponseId::ConnectorTransactionId(id) =
++                                resource_id
++                            {
++                                preprocessing_reference_id = Some(id.clone());
++                            }
++                        }
++                        router_data = preprocessing_router_data;
++                    }
++                    Err(err) => {
++                        return Err(err);
++                    }
++                }
++            }
++
++            router_data.reference_id = preprocessing_reference_id;
++
+             let should_continue = match router_data
+                 .create_order_at_connector(state, &connector, should_continue_further)
+                 .await?

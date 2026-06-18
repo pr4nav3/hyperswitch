@@ -1,0 +1,621 @@
+From bf29914755ac1a82f1916b5149bf2e8eee6db2d5 Mon Sep 17 00:00:00 2001
+From: Ayush <114248859+ayush22667@users.noreply.github.com>
+Date: Wed, 22 Oct 2025 12:55:19 +0530
+Subject: [PATCH 1/4] fix(payments): update preprocessing steps and handle
+ session token in payment flow
+
+---
+ crates/router/src/core/payments.rs | 29 ++++++++++++++++++++++++-----
+ 1 file changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index b010070b3d5..ac586b04b8a 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -4444,12 +4444,31 @@ where
+             should_continue_further,
+         )
+         .await?;
+-    let should_continue_further = tokenization::update_router_data_with_payment_method_token_result(
+-        payment_method_token_response,
+-        &mut router_data,
+-        is_retry_payment,
++    let mut should_continue_further =
++        tokenization::update_router_data_with_payment_method_token_result(
++            payment_method_token_response,
++            &mut router_data,
++            is_retry_payment,
++            should_continue_further,
++        );
++
++    (router_data, should_continue_further) = complete_preprocessing_steps_if_required(
++        state,
++        &connector,
++        payment_data,
++        router_data,
++        operation,
+         should_continue_further,
+-    );
++    )
++    .await?;
++    if let Ok(router_types::PaymentsResponseData::PreProcessingResponse {
++        session_token: Some(session_token),
++        ..
++    }) = router_data.response.to_owned()
++    {
++        payment_data.push_sessions_token(session_token);
++    };
++
+     let should_continue = match router_data
+         .create_order_at_connector(state, &connector, should_continue_further)
+         .await?
+
+From 5c3d5aaa8d21e450e3acdd8d19205d4212a86f71 Mon Sep 17 00:00:00 2001
+From: Ayush <114248859+ayush22667@users.noreply.github.com>
+Date: Thu, 23 Oct 2025 18:45:22 +0530
+Subject: [PATCH 2/4] fix(payments): implement create order functionality and
+ update related structures
+
+---
+ crates/common_enums/src/connector_enums.rs    |  9 ++-
+ .../src/connectors/airwallex.rs               | 68 ++++++++-----------
+ .../src/connectors/airwallex/transformers.rs  | 40 ++++++++---
+ .../src/default_implementations.rs            |  2 +-
+ .../src/router_request_types.rs               |  6 ++
+ crates/router/src/core/payments.rs            | 37 ++--------
+ .../src/core/payments/flows/authorize_flow.rs |  2 +
+ .../payments/flows/external_proxy_flow.rs     |  2 +
+ crates/router/src/types.rs                    |  1 +
+ 9 files changed, 78 insertions(+), 89 deletions(-)
+
+diff --git a/crates/common_enums/src/connector_enums.rs b/crates/common_enums/src/connector_enums.rs
+index 518d89b5e52..9490221d90c 100644
+--- a/crates/common_enums/src/connector_enums.rs
++++ b/crates/common_enums/src/connector_enums.rs
+@@ -426,7 +426,10 @@ impl Connector {
+         )
+     }
+     pub fn requires_order_creation_before_payment(self, payment_method: PaymentMethod) -> bool {
+-        matches!((self, payment_method), (Self::Razorpay, PaymentMethod::Upi))
++        matches!(
++            (self, payment_method),
++            (Self::Razorpay, PaymentMethod::Upi) | (Self::Airwallex, PaymentMethod::Card)
++        )
+     }
+     pub fn supports_file_storage_module(self) -> bool {
+         matches!(self, Self::Stripe | Self::Checkout | Self::Worldpayvantiv)
+@@ -575,10 +578,6 @@ impl Connector {
+         }
+     }
+ 
+-    pub fn is_pre_processing_required_before_authorize(self) -> bool {
+-        matches!(self, Self::Airwallex)
+-    }
+-
+     pub fn get_payment_methods_supporting_extended_authorization(self) -> HashSet<PaymentMethod> {
+         HashSet::from([PaymentMethod::Card])
+     }
+diff --git a/crates/hyperswitch_connectors/src/connectors/airwallex.rs b/crates/hyperswitch_connectors/src/connectors/airwallex.rs
+index 750ebdf84aa..c0eb0e3a165 100644
+--- a/crates/hyperswitch_connectors/src/connectors/airwallex.rs
++++ b/crates/hyperswitch_connectors/src/connectors/airwallex.rs
+@@ -19,23 +19,26 @@ use hyperswitch_domain_models::{
+     router_data::{AccessToken, ErrorResponse, RouterData},
+     router_flow_types::{
+         access_token_auth::AccessTokenAuth,
+-        payments::{Authorize, Capture, PSync, PaymentMethodToken, Session, SetupMandate, Void},
++        payments::{
++            Authorize, Capture, CreateOrder, PSync, PaymentMethodToken, Session, SetupMandate, Void,
++        },
+         refunds::{Execute, RSync},
+-        CompleteAuthorize, PreProcessing,
++        CompleteAuthorize,
+     },
+     router_request_types::{
+-        AccessTokenRequestData, CompleteAuthorizeData, PaymentMethodTokenizationData,
+-        PaymentsAuthorizeData, PaymentsCancelData, PaymentsCaptureData, PaymentsPreProcessingData,
+-        PaymentsSessionData, PaymentsSyncData, RefundsData, SetupMandateRequestData,
++        AccessTokenRequestData, CompleteAuthorizeData, CreateOrderRequestData,
++        PaymentMethodTokenizationData, PaymentsAuthorizeData, PaymentsCancelData,
++        PaymentsCaptureData, PaymentsSessionData, PaymentsSyncData, RefundsData,
++        SetupMandateRequestData,
+     },
+     router_response_types::{
+         ConnectorInfo, PaymentMethodDetails, PaymentsResponseData, RefundsResponseData,
+         SupportedPaymentMethods, SupportedPaymentMethodsExt,
+     },
+     types::{
+-        PaymentsAuthorizeRouterData, PaymentsCancelRouterData, PaymentsCaptureRouterData,
+-        PaymentsCompleteAuthorizeRouterData, PaymentsPreProcessingRouterData,
+-        PaymentsSyncRouterData, RefundSyncRouterData, RefundsRouterData, SetupMandateRouterData,
++        CreateOrderRouterData, PaymentsAuthorizeRouterData, PaymentsCancelRouterData,
++        PaymentsCaptureRouterData, PaymentsCompleteAuthorizeRouterData, PaymentsSyncRouterData,
++        RefundSyncRouterData, RefundsRouterData, SetupMandateRouterData,
+     },
+ };
+ use hyperswitch_interfaces::{
+@@ -47,7 +50,7 @@ use hyperswitch_interfaces::{
+     disputes::DisputePayload,
+     errors,
+     events::connector_api_logs::ConnectorEvent,
+-    types::{self, Response},
++    types::{self, CreateOrderType, Response},
+     webhooks::{IncomingWebhook, IncomingWebhookRequestDetails},
+ };
+ use masking::{Mask, PeekInterface};
+@@ -154,8 +157,8 @@ impl ConnectorCommon for Airwallex {
+ impl ConnectorValidation for Airwallex {}
+ 
+ impl api::Payment for Airwallex {}
+-impl api::PaymentsPreProcessing for Airwallex {}
+ impl api::PaymentsCompleteAuthorize for Airwallex {}
++impl api::PaymentsCreateOrder for Airwallex {}
+ impl api::MandateSetup for Airwallex {}
+ impl ConnectorIntegration<SetupMandate, SetupMandateRequestData, PaymentsResponseData>
+     for Airwallex
+@@ -262,12 +265,10 @@ impl ConnectorIntegration<AccessTokenAuth, AccessTokenRequestData, AccessToken>
+     }
+ }
+ 
+-impl ConnectorIntegration<PreProcessing, PaymentsPreProcessingData, PaymentsResponseData>
+-    for Airwallex
+-{
++impl ConnectorIntegration<CreateOrder, CreateOrderRequestData, PaymentsResponseData> for Airwallex {
+     fn get_headers(
+         &self,
+-        req: &PaymentsPreProcessingRouterData,
++        req: &CreateOrderRouterData,
+         connectors: &Connectors,
+     ) -> CustomResult<Vec<(String, masking::Maskable<String>)>, errors::ConnectorError> {
+         self.build_headers(req, connectors)
+@@ -279,7 +280,7 @@ impl ConnectorIntegration<PreProcessing, PaymentsPreProcessingData, PaymentsResp
+ 
+     fn get_url(
+         &self,
+-        _req: &PaymentsPreProcessingRouterData,
++        _req: &CreateOrderRouterData,
+         connectors: &Connectors,
+     ) -> CustomResult<String, errors::ConnectorError> {
+         Ok(format!(
+@@ -291,22 +292,13 @@ impl ConnectorIntegration<PreProcessing, PaymentsPreProcessingData, PaymentsResp
+ 
+     fn get_request_body(
+         &self,
+-        req: &PaymentsPreProcessingRouterData,
++        req: &CreateOrderRouterData,
+         _connectors: &Connectors,
+     ) -> CustomResult<RequestContent, errors::ConnectorError> {
+-        let amount_in_minor_unit = MinorUnit::new(req.request.amount.ok_or(
+-            errors::ConnectorError::MissingRequiredField {
+-                field_name: "amount",
+-            },
+-        )?);
+         let amount = convert_amount(
+             self.amount_converter,
+-            amount_in_minor_unit,
+-            req.request
+-                .currency
+-                .ok_or(errors::ConnectorError::MissingRequiredField {
+-                    field_name: "currency",
+-                })?,
++            req.request.minor_amount,
++            req.request.currency,
+         )?;
+         let connector_router_data = airwallex::AirwallexRouterData::try_from((amount, req))?;
+         let connector_req = airwallex::AirwallexIntentRequest::try_from(&connector_router_data)?;
+@@ -315,35 +307,29 @@ impl ConnectorIntegration<PreProcessing, PaymentsPreProcessingData, PaymentsResp
+ 
+     fn build_request(
+         &self,
+-        req: &PaymentsPreProcessingRouterData,
++        req: &CreateOrderRouterData,
+         connectors: &Connectors,
+     ) -> CustomResult<Option<Request>, errors::ConnectorError> {
+         Ok(Some(
+             RequestBuilder::new()
+                 .method(Method::Post)
+-                .url(&types::PaymentsPreProcessingType::get_url(
+-                    self, req, connectors,
+-                )?)
++                .url(&CreateOrderType::get_url(self, req, connectors)?)
+                 .attach_default_headers()
+-                .headers(types::PaymentsPreProcessingType::get_headers(
+-                    self, req, connectors,
+-                )?)
+-                .set_body(types::PaymentsPreProcessingType::get_request_body(
+-                    self, req, connectors,
+-                )?)
++                .headers(CreateOrderType::get_headers(self, req, connectors)?)
++                .set_body(CreateOrderType::get_request_body(self, req, connectors)?)
+                 .build(),
+         ))
+     }
+ 
+     fn handle_response(
+         &self,
+-        data: &PaymentsPreProcessingRouterData,
++        data: &CreateOrderRouterData,
+         event_builder: Option<&mut ConnectorEvent>,
+         res: Response,
+-    ) -> CustomResult<PaymentsPreProcessingRouterData, errors::ConnectorError> {
+-        let response: airwallex::AirwallexPaymentsResponse = res
++    ) -> CustomResult<CreateOrderRouterData, errors::ConnectorError> {
++        let response: airwallex::AirwallexOrderResponse = res
+             .response
+-            .parse_struct("airwallex AirwallexPaymentsResponse")
++            .parse_struct("airwallex AirwallexOrderResponse")
+             .change_context(errors::ConnectorError::ResponseDeserializationFailed)?;
+ 
+         event_builder.map(|i| i.set_response_body(&response));
+diff --git a/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs b/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
+index f8161c2763c..3396eb4b38c 100644
+--- a/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
+@@ -27,7 +27,7 @@ use url::Url;
+ use uuid::Uuid;
+ 
+ use crate::{
+-    types::{RefundsResponseRouterData, ResponseRouterData},
++    types::{CreateOrderResponseRouterData, RefundsResponseRouterData, ResponseRouterData},
+     utils::{
+         self, BrowserInformationData, CardData as _, ForeignTryFrom, PaymentsAuthorizeRequestData,
+         PhoneDetailsData, RouterData as _,
+@@ -74,23 +74,17 @@ pub struct AirwallexIntentRequest {
+     order: Option<AirwallexOrderData>,
+ }
+ 
+-impl TryFrom<&AirwallexRouterData<&types::PaymentsPreProcessingRouterData>>
+-    for AirwallexIntentRequest
+-{
++impl TryFrom<&AirwallexRouterData<&types::CreateOrderRouterData>> for AirwallexIntentRequest {
+     type Error = error_stack::Report<errors::ConnectorError>;
+     fn try_from(
+-        item: &AirwallexRouterData<&types::PaymentsPreProcessingRouterData>,
++        item: &AirwallexRouterData<&types::CreateOrderRouterData>,
+     ) -> Result<Self, Self::Error> {
+         let referrer_data = ReferrerData {
+             r_type: "hyperswitch".to_string(),
+             version: "1.0.0".to_string(),
+         };
+         let amount = item.amount.clone();
+-        let currency = item.router_data.request.currency.ok_or(
+-            errors::ConnectorError::MissingRequiredField {
+-                field_name: "currency",
+-            },
+-        )?;
++        let currency = item.router_data.request.currency;
+ 
+         let order = match item.router_data.request.payment_method_data {
+             Some(PaymentMethodData::PayLater(_)) => Some(
+@@ -137,6 +131,32 @@ impl TryFrom<&AirwallexRouterData<&types::PaymentsPreProcessingRouterData>>
+     }
+ }
+ 
++#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
++pub struct AirwallexOrderResponse {
++    pub status: AirwallexPaymentStatus,
++    pub id: String,
++    pub amount: Option<f32>,
++    pub payment_consent_id: Option<Secret<String>>,
++    pub next_action: Option<AirwallexPaymentsNextAction>,
++}
++
++impl TryFrom<CreateOrderResponseRouterData<AirwallexOrderResponse>>
++    for types::CreateOrderRouterData
++{
++    type Error = error_stack::Report<errors::ConnectorError>;
++    fn try_from(
++        item: CreateOrderResponseRouterData<AirwallexOrderResponse>,
++    ) -> Result<Self, Self::Error> {
++        Ok(Self {
++            reference_id: Some(item.response.id.clone()),
++            response: Ok(PaymentsResponseData::PaymentsCreateOrderResponse {
++                order_id: item.response.id.clone(),
++            }),
++            ..item.data
++        })
++    }
++}
++
+ #[derive(Debug, Serialize)]
+ pub struct AirwallexRouterData<T> {
+     pub amount: StringMajorUnit,
+diff --git a/crates/hyperswitch_connectors/src/default_implementations.rs b/crates/hyperswitch_connectors/src/default_implementations.rs
+index b3e3e710b47..b09cfda9ecf 100644
+--- a/crates/hyperswitch_connectors/src/default_implementations.rs
++++ b/crates/hyperswitch_connectors/src/default_implementations.rs
+@@ -764,7 +764,6 @@ default_imp_for_create_order!(
+     connectors::Adyen,
+     connectors::Adyenplatform,
+     connectors::Affirm,
+-    connectors::Airwallex,
+     connectors::Amazonpay,
+     connectors::Archipel,
+     connectors::Authipay,
+@@ -2338,6 +2337,7 @@ default_imp_for_pre_processing_steps!(
+     connectors::Aci,
+     connectors::Adyenplatform,
+     connectors::Affirm,
++    connectors::Airwallex,
+     connectors::Amazonpay,
+     connectors::Archipel,
+     connectors::Authipay,
+diff --git a/crates/hyperswitch_domain_models/src/router_request_types.rs b/crates/hyperswitch_domain_models/src/router_request_types.rs
+index 908dda6a666..deb0f28f417 100644
+--- a/crates/hyperswitch_domain_models/src/router_request_types.rs
++++ b/crates/hyperswitch_domain_models/src/router_request_types.rs
+@@ -517,6 +517,8 @@ impl TryFrom<ExternalVaultProxyPaymentsData> for PaymentMethodTokenizationData {
+ pub struct CreateOrderRequestData {
+     pub minor_amount: MinorUnit,
+     pub currency: storage_enums::Currency,
++    pub payment_method_data: Option<PaymentMethodData>,
++    pub order_details: Option<Vec<OrderDetailsWithAmount>>,
+ }
+ 
+ impl TryFrom<PaymentsAuthorizeData> for CreateOrderRequestData {
+@@ -526,6 +528,8 @@ impl TryFrom<PaymentsAuthorizeData> for CreateOrderRequestData {
+         Ok(Self {
+             minor_amount: data.minor_amount,
+             currency: data.currency,
++            payment_method_data: Some(data.payment_method_data),
++            order_details: data.order_details,
+         })
+     }
+ }
+@@ -537,6 +541,8 @@ impl TryFrom<ExternalVaultProxyPaymentsData> for CreateOrderRequestData {
+         Ok(Self {
+             minor_amount: data.minor_amount,
+             currency: data.currency,
++            payment_method_data: None,
++            order_details: data.order_details,
+         })
+     }
+ }
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index ac586b04b8a..50c8f54c23f 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -4444,31 +4444,12 @@ where
+             should_continue_further,
+         )
+         .await?;
+-    let mut should_continue_further =
+-        tokenization::update_router_data_with_payment_method_token_result(
+-            payment_method_token_response,
+-            &mut router_data,
+-            is_retry_payment,
+-            should_continue_further,
+-        );
+-
+-    (router_data, should_continue_further) = complete_preprocessing_steps_if_required(
+-        state,
+-        &connector,
+-        payment_data,
+-        router_data,
+-        operation,
++    let should_continue_further = tokenization::update_router_data_with_payment_method_token_result(
++        payment_method_token_response,
++        &mut router_data,
++        is_retry_payment,
+         should_continue_further,
+-    )
+-    .await?;
+-    if let Ok(router_types::PaymentsResponseData::PreProcessingResponse {
+-        session_token: Some(session_token),
+-        ..
+-    }) = router_data.response.to_owned()
+-    {
+-        payment_data.push_sessions_token(session_token);
+-    };
+-
++    );
+     let should_continue = match router_data
+         .create_order_at_connector(state, &connector, should_continue_further)
+         .await?
+@@ -6650,14 +6631,6 @@ where
+     dyn api::Connector:
+         services::api::ConnectorIntegration<F, Req, router_types::PaymentsResponseData>,
+ {
+-    if !is_operation_complete_authorize(&operation)
+-        && connector
+-            .connector_name
+-            .is_pre_processing_required_before_authorize()
+-    {
+-        router_data = router_data.preprocessing_steps(state, connector).await?;
+-        return Ok((router_data, should_continue_payment));
+-    }
+     //TODO: For ACH transfers, if preprocessing_step is not required for connectors encountered in future, add the check
+     let router_data_and_should_continue_payment = match payment_data.get_payment_method_data() {
+         Some(domain::PaymentMethodData::BankTransfer(_)) => (router_data, should_continue_payment),
+diff --git a/crates/router/src/core/payments/flows/authorize_flow.rs b/crates/router/src/core/payments/flows/authorize_flow.rs
+index cbb5b07f857..6e59a21878c 100644
+--- a/crates/router/src/core/payments/flows/authorize_flow.rs
++++ b/crates/router/src/core/payments/flows/authorize_flow.rs
+@@ -501,6 +501,7 @@ impl Feature<api::Authorize, types::PaymentsAuthorizeData> for types::PaymentsAu
+ 
+             Ok(Some(types::CreateOrderResult {
+                 create_order_result: create_order_resp,
++                reference_id: resp.reference_id,
+             }))
+         } else {
+             // If the connector does not require order creation, return None
+@@ -515,6 +516,7 @@ impl Feature<api::Authorize, types::PaymentsAuthorizeData> for types::PaymentsAu
+         match create_order_result.create_order_result {
+             Ok(order_id) => {
+                 self.request.order_id = Some(order_id.clone()); // ? why this is assigned here and ucs also wants this to populate data
++                self.reference_id = create_order_result.reference_id;
+                 self.response =
+                     Ok(types::PaymentsResponseData::PaymentsCreateOrderResponse { order_id });
+             }
+diff --git a/crates/router/src/core/payments/flows/external_proxy_flow.rs b/crates/router/src/core/payments/flows/external_proxy_flow.rs
+index 4e66c5deaca..2cf4752a162 100644
+--- a/crates/router/src/core/payments/flows/external_proxy_flow.rs
++++ b/crates/router/src/core/payments/flows/external_proxy_flow.rs
+@@ -342,6 +342,7 @@ impl Feature<api::ExternalVaultProxy, types::ExternalVaultProxyPaymentsData>
+ 
+             Ok(Some(types::CreateOrderResult {
+                 create_order_result: create_order_resp,
++                reference_id: resp.reference_id,
+             }))
+         } else {
+             // If the connector does not require order creation, return None
+@@ -356,6 +357,7 @@ impl Feature<api::ExternalVaultProxy, types::ExternalVaultProxyPaymentsData>
+         match create_order_result.create_order_result {
+             Ok(order_id) => {
+                 self.request.order_id = Some(order_id.clone()); // ? why this is assigned here and ucs also wants this to populate data
++                self.reference_id = create_order_result.reference_id;
+                 self.response =
+                     Ok(types::PaymentsResponseData::PaymentsCreateOrderResponse { order_id });
+             }
+diff --git a/crates/router/src/types.rs b/crates/router/src/types.rs
+index 02925958977..c6d6ff313ae 100644
+--- a/crates/router/src/types.rs
++++ b/crates/router/src/types.rs
+@@ -715,6 +715,7 @@ pub struct PaymentMethodTokenResult {
+ #[derive(Clone)]
+ pub struct CreateOrderResult {
+     pub create_order_result: Result<String, ErrorResponse>,
++    pub reference_id: Option<String>,
+ }
+ 
+ pub struct PspTokenResult {
+
+From d5872608303399435df4731e0a9799349be1675c Mon Sep 17 00:00:00 2001
+From: Ayush <114248859+ayush22667@users.noreply.github.com>
+Date: Thu, 23 Oct 2025 21:31:19 +0530
+Subject: [PATCH 3/4] fix(airwallex): remove unused amount field from
+ AirwallexOrderResponse struct
+
+---
+ .../src/connectors/airwallex/transformers.rs                     | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs b/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
+index 3396eb4b38c..80b243f7361 100644
+--- a/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
+@@ -135,7 +135,6 @@ impl TryFrom<&AirwallexRouterData<&types::CreateOrderRouterData>> for AirwallexI
+ pub struct AirwallexOrderResponse {
+     pub status: AirwallexPaymentStatus,
+     pub id: String,
+-    pub amount: Option<f32>,
+     pub payment_consent_id: Option<Secret<String>>,
+     pub next_action: Option<AirwallexPaymentsNextAction>,
+ }
+
+From 251de324363e93fa92f79dffe6b8de42be3a143a Mon Sep 17 00:00:00 2001
+From: Ayush <114248859+ayush22667@users.noreply.github.com>
+Date: Thu, 23 Oct 2025 22:50:39 +0530
+Subject: [PATCH 4/4] refactor(payments): remove reference_id from
+ CreateOrderResult and related flows
+
+---
+ .../hyperswitch_connectors/src/connectors/airwallex.rs   | 9 +++++----
+ .../src/connectors/airwallex/transformers.rs             | 1 -
+ crates/router/src/core/payments/flows/authorize_flow.rs  | 6 +-----
+ .../src/core/payments/flows/external_proxy_flow.rs       | 2 --
+ crates/router/src/types.rs                               | 1 -
+ 5 files changed, 6 insertions(+), 13 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/airwallex.rs b/crates/hyperswitch_connectors/src/connectors/airwallex.rs
+index c0eb0e3a165..7b1e14b035e 100644
+--- a/crates/hyperswitch_connectors/src/connectors/airwallex.rs
++++ b/crates/hyperswitch_connectors/src/connectors/airwallex.rs
+@@ -61,7 +61,10 @@ use crate::{
+     connectors::airwallex::transformers::AirwallexAuthorizeResponse,
+     constants::headers,
+     types::{RefreshTokenRouterData, ResponseRouterData},
+-    utils::{convert_amount, AccessTokenRequestInfo, ForeignTryFrom, RefundsRequestData},
++    utils::{
++        convert_amount, AccessTokenRequestInfo, ForeignTryFrom, PaymentsAuthorizeRequestData,
++        RefundsRequestData,
++    },
+ };
+ 
+ #[derive(Clone)]
+@@ -377,9 +380,7 @@ impl ConnectorIntegration<Authorize, PaymentsAuthorizeData, PaymentsResponseData
+             "{}{}{}{}",
+             self.base_url(connectors),
+             "api/v1/pa/payment_intents/",
+-            req.reference_id
+-                .clone()
+-                .ok_or(errors::ConnectorError::MissingConnectorTransactionID)?,
++            req.request.get_order_id()?,
+             "/confirm"
+         ))
+     }
+diff --git a/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs b/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
+index 80b243f7361..01060aac8a4 100644
+--- a/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/airwallex/transformers.rs
+@@ -147,7 +147,6 @@ impl TryFrom<CreateOrderResponseRouterData<AirwallexOrderResponse>>
+         item: CreateOrderResponseRouterData<AirwallexOrderResponse>,
+     ) -> Result<Self, Self::Error> {
+         Ok(Self {
+-            reference_id: Some(item.response.id.clone()),
+             response: Ok(PaymentsResponseData::PaymentsCreateOrderResponse {
+                 order_id: item.response.id.clone(),
+             }),
+diff --git a/crates/router/src/core/payments/flows/authorize_flow.rs b/crates/router/src/core/payments/flows/authorize_flow.rs
+index 6e59a21878c..c299deac5ae 100644
+--- a/crates/router/src/core/payments/flows/authorize_flow.rs
++++ b/crates/router/src/core/payments/flows/authorize_flow.rs
+@@ -501,7 +501,6 @@ impl Feature<api::Authorize, types::PaymentsAuthorizeData> for types::PaymentsAu
+ 
+             Ok(Some(types::CreateOrderResult {
+                 create_order_result: create_order_resp,
+-                reference_id: resp.reference_id,
+             }))
+         } else {
+             // If the connector does not require order creation, return None
+@@ -516,7 +515,6 @@ impl Feature<api::Authorize, types::PaymentsAuthorizeData> for types::PaymentsAu
+         match create_order_result.create_order_result {
+             Ok(order_id) => {
+                 self.request.order_id = Some(order_id.clone()); // ? why this is assigned here and ucs also wants this to populate data
+-                self.reference_id = create_order_result.reference_id;
+                 self.response =
+                     Ok(types::PaymentsResponseData::PaymentsCreateOrderResponse { order_id });
+             }
+@@ -688,9 +686,7 @@ pub async fn authorize_preprocessing_steps<F: Clone>(
+             router_data.request.to_owned(),
+             resp.response.clone(),
+         );
+-        if connector.connector_name == api_models::enums::Connector::Airwallex {
+-            authorize_router_data.reference_id = resp.reference_id;
+-        } else if connector.connector_name == api_models::enums::Connector::Nuvei {
++        if connector.connector_name == api_models::enums::Connector::Nuvei {
+             let (enrolled_for_3ds, related_transaction_id) = match &authorize_router_data.response {
+                 Ok(types::PaymentsResponseData::ThreeDSEnrollmentResponse {
+                     enrolled_v2,
+diff --git a/crates/router/src/core/payments/flows/external_proxy_flow.rs b/crates/router/src/core/payments/flows/external_proxy_flow.rs
+index 2cf4752a162..4e66c5deaca 100644
+--- a/crates/router/src/core/payments/flows/external_proxy_flow.rs
++++ b/crates/router/src/core/payments/flows/external_proxy_flow.rs
+@@ -342,7 +342,6 @@ impl Feature<api::ExternalVaultProxy, types::ExternalVaultProxyPaymentsData>
+ 
+             Ok(Some(types::CreateOrderResult {
+                 create_order_result: create_order_resp,
+-                reference_id: resp.reference_id,
+             }))
+         } else {
+             // If the connector does not require order creation, return None
+@@ -357,7 +356,6 @@ impl Feature<api::ExternalVaultProxy, types::ExternalVaultProxyPaymentsData>
+         match create_order_result.create_order_result {
+             Ok(order_id) => {
+                 self.request.order_id = Some(order_id.clone()); // ? why this is assigned here and ucs also wants this to populate data
+-                self.reference_id = create_order_result.reference_id;
+                 self.response =
+                     Ok(types::PaymentsResponseData::PaymentsCreateOrderResponse { order_id });
+             }
+diff --git a/crates/router/src/types.rs b/crates/router/src/types.rs
+index c6d6ff313ae..02925958977 100644
+--- a/crates/router/src/types.rs
++++ b/crates/router/src/types.rs
+@@ -715,7 +715,6 @@ pub struct PaymentMethodTokenResult {
+ #[derive(Clone)]
+ pub struct CreateOrderResult {
+     pub create_order_result: Result<String, ErrorResponse>,
+-    pub reference_id: Option<String>,
+ }
+ 
+ pub struct PspTokenResult {

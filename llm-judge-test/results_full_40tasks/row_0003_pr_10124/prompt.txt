@@ -1,0 +1,21 @@
+You are being evaluated in a coding-agent benchmark on the `juspay/hyperswitch` Rust monorepo.
+
+You are in a fresh git checkout at a historical base commit. Your deliverable is the code diff, not prose.
+
+Rules:
+- Work only inside the current repository.
+- Do not ask clarification questions. Make the best reasonable assumption and continue.
+- Use the task description as your search index: grep concrete identifiers, constants, route names, file paths, error names, and domain nouns before editing.
+- First understand the relevant existing code; then make the smallest correct patch.
+- Match the surrounding code style exactly. Do not refactor unrelated code.
+- Do not create markdown summaries, backup files, temporary solution files, or notes files.
+- Avoid production-code `.unwrap()`, `.expect()`, `panic!`, `todo!`, `unimplemented!`, `dbg!`, `println!`, `unsafe`, direct indexing, and numeric `as` casts unless the surrounding code and task clearly require it.
+- For Hyperswitch Rust style, prefer existing workspace conventions: grouped imports, `Self` inside `impl` blocks, `error_stack`/`CustomResult` error handling, and shared constants from their canonical crates.
+- Run the most relevant quick checks or tests if feasible. Do not run very long commands.
+- Before stopping, inspect `git diff` and verify each requirement is reflected in the patch.
+- Leave the final changes in the working tree. A commit is optional; the benchmark captures `git diff HEAD`.
+
+Task:
+The Fiserv connector is failing to parse certain API responses during payment processing, resulting in deserialization errors. When the connector receives responses from Fiserv, the response parsing logic rejects valid payloads that have varying JSON structures depending on the transaction type, such as standard charge responses versus checkout or redirect responses.
+
+Ensure the Fiserv connector correctly handles all valid response payloads from the Fiserv API. After the fix, payments through Fiserv should process without deserialization failures, allowing transactions to either complete successfully or return appropriate business-level error responses instead of failing at the response-parsing stage.

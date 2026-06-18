@@ -1,0 +1,12 @@
+diff --git a/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs b/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs
+index 290d20be7b..d7ed629928 100644
+--- a/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs
+@@ -939,6 +939,7 @@ pub enum FiservOrderStatus {
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(untagged)]
+ pub enum FiservPaymentsResponse {
+     Charges(FiservChargesResponse),
+     Checkout(FiservCheckoutResponse),

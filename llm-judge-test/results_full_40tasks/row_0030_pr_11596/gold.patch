@@ -1,0 +1,121 @@
+From 9bf0c16b40ef9b6e0a203a8d56346881e2e222e5 Mon Sep 17 00:00:00 2001
+From: Grovy-3170 <amanak3170@gmail.com>
+Date: Tue, 24 Mar 2026 16:13:26 +0530
+Subject: [PATCH] fix(diesel_models): prevent TOTP secret from being cleared on
+ status update
+
+The UserUpdate::TotpUpdate variant used Option<T> for totp_secret and
+totp_recovery_codes fields. When terminate_two_factor_auth API passed
+None for these fields (meaning "don't update"), the conversion to
+UserUpdateInternal transformed None into Some(None), which Diesel
+interpreted as "set to NULL", accidentally clearing the TOTP secret.
+
+Changed the field types to Option<Option<T>> to properly distinguish:
+- None: don't update the field
+- Some(None): set field to NULL
+- Some(Some(value)): update field to value
+---
+ crates/diesel_models/src/user.rs |  8 ++++----
+ crates/router/src/core/user.rs   | 10 +++++-----
+ crates/router/src/db/user.rs     |  9 +++++----
+ 3 files changed, 14 insertions(+), 13 deletions(-)
+
+diff --git a/crates/diesel_models/src/user.rs b/crates/diesel_models/src/user.rs
+index 30c9e687584..d28cb773e64 100644
+--- a/crates/diesel_models/src/user.rs
++++ b/crates/diesel_models/src/user.rs
+@@ -72,8 +72,8 @@ pub enum UserUpdate {
+     },
+     TotpUpdate {
+         totp_status: Option<TotpStatus>,
+-        totp_secret: Option<Encryption>,
+-        totp_recovery_codes: Option<Vec<Secret<String>>>,
++        totp_secret: Option<Option<Encryption>>,
++        totp_recovery_codes: Option<Option<Vec<Secret<String>>>>,
+     },
+     PasswordUpdate {
+         password: Secret<String>,
+@@ -129,8 +129,8 @@ impl From<UserUpdate> for UserUpdateInternal {
+                 is_verified: None,
+                 last_modified_at,
+                 totp_status,
+-                totp_secret: Some(totp_secret),
+-                totp_recovery_codes: Some(totp_recovery_codes),
++                totp_secret,
++                totp_recovery_codes,
+                 last_password_modified_at: None,
+                 lineage_context: None,
+                 is_active: None,
+diff --git a/crates/router/src/core/user.rs b/crates/router/src/core/user.rs
+index 1a80f6ae678..f0822761a59 100644
+--- a/crates/router/src/core/user.rs
++++ b/crates/router/src/core/user.rs
+@@ -2407,7 +2407,7 @@ pub async fn update_totp(
+             &user_token.user_id,
+             storage_user::UserUpdate::TotpUpdate {
+                 totp_status: None,
+-                totp_secret: Some(
++                totp_secret: Some(Some(
+                     // TODO: Impl conversion trait for User and move this there
+                     domain::types::crypto_operation::<String, hyperswitch_masking::WithType>(
+                         &(&state).into(),
+@@ -2420,7 +2420,7 @@ pub async fn update_totp(
+                     .and_then(|val| val.try_into_operation())
+                     .change_context(UserErrors::InternalServerError)?
+                     .into(),
+-                ),
++                )),
+ 
+                 totp_recovery_codes: None,
+             },
+@@ -2459,11 +2459,11 @@ pub async fn generate_recovery_codes(
+             storage_user::UserUpdate::TotpUpdate {
+                 totp_status: None,
+                 totp_secret: None,
+-                totp_recovery_codes: Some(
++                totp_recovery_codes: Some(Some(
+                     recovery_codes
+                         .get_hashed()
+                         .change_context(UserErrors::InternalServerError)?,
+-                ),
++                )),
+             },
+         )
+         .await
+@@ -2550,7 +2550,7 @@ pub async fn verify_recovery_code(
+             storage_user::UserUpdate::TotpUpdate {
+                 totp_status: None,
+                 totp_secret: None,
+-                totp_recovery_codes: Some(recovery_codes),
++                totp_recovery_codes: Some(Some(recovery_codes)),
+             },
+         )
+         .await
+diff --git a/crates/router/src/db/user.rs b/crates/router/src/db/user.rs
+index 9f96835d76e..976cc47785e 100644
+--- a/crates/router/src/db/user.rs
++++ b/crates/router/src/db/user.rs
+@@ -329,8 +329,9 @@ impl UserInterface for MockDb {
+             } => storage::User {
+                 last_modified_at,
+                 totp_status: totp_status.unwrap_or(user.totp_status),
+-                totp_secret: totp_secret.or(user.totp_secret.clone()),
+-                totp_recovery_codes: totp_recovery_codes.or(user.totp_recovery_codes.clone()),
++                totp_secret: totp_secret.unwrap_or(user.totp_secret.clone()),
++                totp_recovery_codes: totp_recovery_codes
++                    .unwrap_or(user.totp_recovery_codes.clone()),
+                 ..user.to_owned()
+             },
+ 
+@@ -402,9 +403,9 @@ impl UserInterface for MockDb {
+             } => storage::User {
+                 last_modified_at,
+                 totp_status: totp_status.unwrap_or(user.totp_status),
+-                totp_secret: totp_secret.or_else(|| user.totp_secret.clone()),
++                totp_secret: totp_secret.unwrap_or(user.totp_secret.clone()),
+                 totp_recovery_codes: totp_recovery_codes
+-                    .or_else(|| user.totp_recovery_codes.clone()),
++                    .unwrap_or(user.totp_recovery_codes.clone()),
+                 ..user.to_owned()
+             },
+ 

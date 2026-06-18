@@ -1,0 +1,173 @@
+From 670d1a13f35e54434706a8ae6dbabc8470e6ded7 Mon Sep 17 00:00:00 2001
+From: Malay Awasthi <malay.awasthi@juspay.in>
+Date: Tue, 30 Sep 2025 16:46:06 +0530
+Subject: [PATCH 1/2] Initial commit
+
+---
+ crates/connector_configs/toml/development.toml         |  6 +++---
+ crates/connector_configs/toml/production.toml          |  6 +++---
+ crates/connector_configs/toml/sandbox.toml             |  6 +++---
+ .../src/connectors/gigadat/transformers.rs             | 10 +++++++---
+ 4 files changed, 16 insertions(+), 12 deletions(-)
+
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index 4b4bbc6ec83..71fa8268f79 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -7167,9 +7167,9 @@ key1 = "TokenEx ID"
+ 
+ [gigadat]
+ [gigadat.connector_auth.SignatureKey]
+-api_key = "Username"
+-api_secret = "Password"
+-key1 = "Compaign Id"
++api_key = "Access Token"
++api_secret = "Security Token"
++key1 = "Campaign ID"
+ [[gigadat.bank_redirect]]
+ payment_method_type = "interac"
+ [gigadat.metadata.site]
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index 86eea4d3534..34fdbde7bfa 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -5904,9 +5904,9 @@ api_key = "API Key"
+ 
+ [gigadat]
+ [gigadat.connector_auth.SignatureKey]
+-api_key = "Username"
+-api_secret = "Password"
+-key1 = "Compaign Id"
++api_key = "Access Token"
++api_secret = "Security Token"
++key1 = "Campaign ID"
+ [[gigadat.bank_redirect]]
+ payment_method_type = "interac"
+ [gigadat.metadata.site]
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index 08ae831a52e..fa278354a19 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -7145,9 +7145,9 @@ api_key = "API Key"
+ 
+ [gigadat]
+ [gigadat.connector_auth.SignatureKey]
+-api_key = "Username"
+-api_secret = "Password"
+-key1 = "Compaign Id"
++api_key = "Access Token"
++api_secret = "Security Token"
++key1 = "Campaign ID"
+ [[gigadat.bank_redirect]]
+ payment_method_type = "interac"
+ [gigadat.metadata.site]
+diff --git a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+index d87bb6374eb..57378a81664 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+@@ -67,6 +67,7 @@ pub struct GigadatCpiRequest {
+     pub transaction_id: String,
+     #[serde(rename = "type")]
+     pub transaction_type: GidadatTransactionType,
++    pub sandbox: bool,
+     pub name: Secret<String>,
+     pub email: Email,
+     pub mobile: Secret<String>,
+@@ -95,9 +96,11 @@ impl TryFrom<&GigadatRouterData<&PaymentsAuthorizeRouterData>> for GigadatCpiReq
+                 let email = router_data.get_billing_email()?;
+                 let mobile = router_data.get_billing_phone_number()?;
+                 let currency = item.router_data.request.currency;
+-
++                let sandbox = match item.router_data.test_mode {
++                    Some(true) => true,
++                    Some(false) | None => false,
++                };
+                 let user_ip = router_data.request.get_browser_info()?.get_ip_address()?;
+-
+                 Ok(Self {
+                     user_id: router_data.get_customer_id()?,
+                     site: metadata.site,
+@@ -107,6 +110,7 @@ impl TryFrom<&GigadatRouterData<&PaymentsAuthorizeRouterData>> for GigadatCpiReq
+                     transaction_id: router_data.connector_request_reference_id.clone(),
+                     transaction_type: GidadatTransactionType::Cpi,
+                     name,
++                    sandbox,
+                     email,
+                     mobile,
+                 })
+@@ -206,7 +210,7 @@ impl<F, T> TryFrom<ResponseRouterData<F, GigadatPaymentResponse, T, PaymentsResp
+         let base_url = CONNECTOR_BASE_URL;
+ 
+         let redirect_url = format!(
+-            "{}/webflow?transaction={}&token={}",
++            "{}webflow?transaction={}&token={}",
+             base_url,
+             item.data.connector_request_reference_id,
+             item.response.token.peek()
+
+From d5813dcbcc0cc2bdcea3e5d8654032d14f60c44a Mon Sep 17 00:00:00 2001
+From: Malay Awasthi <malay.awasthi@juspay.in>
+Date: Tue, 30 Sep 2025 18:47:48 +0530
+Subject: [PATCH 2/2] Initial commit
+
+---
+ .../hyperswitch_connectors/src/connectors/gigadat.rs | 12 ++++++++++--
+ .../src/connectors/gigadat/transformers.rs           |  8 ++++----
+ 2 files changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/gigadat.rs b/crates/hyperswitch_connectors/src/connectors/gigadat.rs
+index 6b566ef3bee..973e1ae6f30 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gigadat.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gigadat.rs
+@@ -124,7 +124,11 @@ impl ConnectorCommon for Gigadat {
+     ) -> CustomResult<Vec<(String, masking::Maskable<String>)>, errors::ConnectorError> {
+         let auth = gigadat::GigadatAuthType::try_from(auth_type)
+             .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
+-        let auth_key = format!("{}:{}", auth.username.peek(), auth.password.peek());
++        let auth_key = format!(
++            "{}:{}",
++            auth.access_token.peek(),
++            auth.security_token.peek()
++        );
+         let auth_header = format!("Basic {}", consts::BASE64_ENGINE.encode(auth_key));
+         Ok(vec![(
+             headers::AUTHORIZATION.to_string(),
+@@ -448,7 +452,11 @@ impl ConnectorIntegration<Execute, RefundsData, RefundsResponseData> for Gigadat
+     ) -> CustomResult<Vec<(String, masking::Maskable<String>)>, errors::ConnectorError> {
+         let auth = gigadat::GigadatAuthType::try_from(&req.connector_auth_type)
+             .change_context(errors::ConnectorError::FailedToObtainAuthType)?;
+-        let auth_key = format!("{}:{}", auth.username.peek(), auth.password.peek());
++        let auth_key = format!(
++            "{}:{}",
++            auth.access_token.peek(),
++            auth.security_token.peek()
++        );
+         let auth_header = format!("Basic {}", consts::BASE64_ENGINE.encode(auth_key));
+         Ok(vec![
+             (
+diff --git a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+index 57378a81664..060628f7a4b 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gigadat/transformers.rs
+@@ -130,8 +130,8 @@ impl TryFrom<&GigadatRouterData<&PaymentsAuthorizeRouterData>> for GigadatCpiReq
+ #[derive(Debug, Clone)]
+ pub struct GigadatAuthType {
+     pub campaign_id: Secret<String>,
+-    pub username: Secret<String>,
+-    pub password: Secret<String>,
++    pub access_token: Secret<String>,
++    pub security_token: Secret<String>,
+ }
+ 
+ impl TryFrom<&ConnectorAuthType> for GigadatAuthType {
+@@ -144,8 +144,8 @@ impl TryFrom<&ConnectorAuthType> for GigadatAuthType {
+                 key1,
+                 api_secret,
+             } => Ok(Self {
+-                password: api_secret.to_owned(),
+-                username: api_key.to_owned(),
++                security_token: api_secret.to_owned(),
++                access_token: api_key.to_owned(),
+                 campaign_id: key1.to_owned(),
+             }),
+             _ => Err(errors::ConnectorError::FailedToObtainAuthType.into()),

@@ -1,0 +1,182 @@
+From bdb3478d4f44034e7184356fe927f8ed509377fd Mon Sep 17 00:00:00 2001
+From: Anurag Singh <anurag.singh.001@Anurag-Singh-WPMHJ5619X.local>
+Date: Tue, 4 Nov 2025 15:37:06 +0530
+Subject: [PATCH 1/4] fix(connector): fix fiserv deserialization error
+
+---
+ .../hyperswitch_connectors/src/connectors/fiserv/transformers.rs | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs b/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs
+index 290d20be7bc..d7ed629928c 100644
+--- a/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/fiserv/transformers.rs
+@@ -939,6 +939,7 @@ pub enum FiservOrderStatus {
+ }
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(untagged)]
+ pub enum FiservPaymentsResponse {
+     Charges(FiservChargesResponse),
+     Checkout(FiservCheckoutResponse),
+
+From 5a1e03b1035e48294619d08e91280a29746ff157 Mon Sep 17 00:00:00 2001
+From: Anurag Singh <anurag.singh.001@MacBookPro.lan>
+Date: Mon, 8 Dec 2025 00:59:22 +0530
+Subject: [PATCH 2/4] fix cypress
+
+---
+ .../cypress/e2e/configs/Payment/Fiserv.js     | 41 ++++++++++++-------
+ 1 file changed, 26 insertions(+), 15 deletions(-)
+
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js b/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
+index 7c2ea2284b1..a8695516fe4 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
+@@ -137,10 +137,10 @@ const payment_method_data_3ds = {
+ const payment_method_data_no3ds = {
+   card: {
+     last4: "1111",
+-    card_type: "CREDIT",
+-    card_network: "Visa",
+-    card_issuer: "JP Morgan",
+-    card_issuing_country: "INDIA",
++    card_type: null,
++    card_network: null,
++    card_issuer: null,
++    card_issuing_country: null,
+     card_isin: "411111",
+     card_extended_bin: null,
+     card_exp_month: "12",
+@@ -221,11 +221,14 @@ export const connectorDetails = {
+         setup_future_usage: "on_session",
+       },
+       Response: {
+-        status: 200,
++        status: 400,
+         body: {
+-          status: "requires_capture",
+-          setup_future_usage: "on_session",
+-          payment_method_data: payment_method_data_3ds,
++          error: {
++            code: "IR_19",
++            message: "Payment method type not supported",
++            reason: "Cards 3DS is not supported by Fiserv",
++            type: "invalid_request",
++          },
+         },
+       },
+     },
+@@ -240,11 +243,14 @@ export const connectorDetails = {
+         setup_future_usage: "on_session",
+       },
+       Response: {
+-        status: 200,
++        status: 400,
+         body: {
+-          status: "succeeded",
+-          setup_future_usage: "on_session",
+-          payment_method_data: payment_method_data_3ds,
++          error: {
++            code: "IR_19",
++            message: "Payment method type not supported",
++            reason: "Cards 3DS is not supported by Fiserv",
++            type: "invalid_request",
++          },
+         },
+       },
+     },
+@@ -332,7 +338,7 @@ export const connectorDetails = {
+         body: {
+           status: "failed",
+           error_code: "104",
+-          error_message: "Unable to assign card to brand: Invalid",
++          error_message: "first 6 digits of the account number - 401288",
+           unified_code: "UE_9000",
+           unified_message: "Something went wrong",
+         },
+@@ -621,9 +627,14 @@ export const connectorDetails = {
+         customer_acceptance: customerAcceptance,
+       },
+       Response: {
+-        status: 200,
++        status: 400,
+         body: {
+-          status: "succeeded",
++          error: {
++            code: "IR_19",
++            message: "Payment method type not supported",
++            reason: "Cards 3DS is not supported by Fiserv",
++            type: "invalid_request",
++          },
+         },
+       },
+     },
+
+From 1e962adb2884fca759f4bab0ece664900a0986b1 Mon Sep 17 00:00:00 2001
+From: Anurag Singh <anurag.singh.001@Anurag-Singh-WPMHJ5619X.local>
+Date: Tue, 9 Dec 2025 14:30:12 +0530
+Subject: [PATCH 3/4] fix fiserv cypress
+
+---
+ cypress-tests/cypress/e2e/configs/Payment/Fiserv.js | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js b/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
+index a8695516fe4..bd06a651ade 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
+@@ -137,10 +137,10 @@ const payment_method_data_3ds = {
+ const payment_method_data_no3ds = {
+   card: {
+     last4: "1111",
+-    card_type: null,
+-    card_network: null,
+-    card_issuer: null,
+-    card_issuing_country: null,
++    card_type: "CREDIT",
++    card_network: "Visa",
++    card_issuer: "JP Morgan",
++    card_issuing_country: "INDIA",
+     card_isin: "411111",
+     card_extended_bin: null,
+     card_exp_month: "12",
+
+From c46e3a73bbe19ed2e012fcbe105f9ae49c935dc9 Mon Sep 17 00:00:00 2001
+From: Anurag Singh <anurag.singh.001@Anurag-Singh-WPMHJ5619X.local>
+Date: Wed, 10 Dec 2025 13:46:22 +0530
+Subject: [PATCH 4/4] chore(cypress): address lints
+
+---
+ .../cypress/e2e/configs/Payment/Fiserv.js      | 18 ------------------
+ 1 file changed, 18 deletions(-)
+
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js b/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
+index bd06a651ade..75962779ca5 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Fiserv.js
+@@ -116,24 +116,6 @@ const requiredFields = {
+   ],
+ };
+ 
+-const payment_method_data_3ds = {
+-  card: {
+-    last4: "1111",
+-    card_type: "CREDIT",
+-    card_network: "Visa",
+-    card_issuer: "JP Morgan",
+-    card_issuing_country: "INDIA",
+-    card_isin: "411111",
+-    card_extended_bin: null,
+-    card_exp_month: "12",
+-    card_exp_year: "30",
+-    card_holder_name: "Joseph Doe",
+-    payment_checks: null,
+-    authentication_data: null,
+-  },
+-  billing: null,
+-};
+-
+ const payment_method_data_no3ds = {
+   card: {
+     last4: "1111",

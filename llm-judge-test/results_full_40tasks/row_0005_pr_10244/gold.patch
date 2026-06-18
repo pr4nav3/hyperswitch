@@ -1,0 +1,959 @@
+From b1f2f5fc485eac5c58fd5fcb7beb840161250de2 Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Thu, 13 Nov 2025 14:30:12 +0530
+Subject: [PATCH 1/4] fix: merchant account metadata parsing
+
+---
+ .../unified_connector_service/transformers.rs | 32 +++++++++----------
+ 1 file changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/crates/router/src/core/unified_connector_service/transformers.rs b/crates/router/src/core/unified_connector_service/transformers.rs
+index a591b9b04c4..8b4ca1bfa38 100644
+--- a/crates/router/src/core/unified_connector_service/transformers.rs
++++ b/crates/router/src/core/unified_connector_service/transformers.rs
+@@ -483,7 +483,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -572,7 +572,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -656,7 +656,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -667,7 +667,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -757,7 +757,7 @@ impl transformers::ForeignTryFrom<&RouterData<Capture, PaymentsCaptureData, Paym
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -829,7 +829,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -840,7 +840,7 @@ impl
+             .and_then(|val| val.as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -960,7 +960,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -971,7 +971,7 @@ impl
+             .and_then(|val| val.as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -1207,7 +1207,7 @@ impl
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1217,7 +1217,7 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1316,7 +1316,7 @@ impl
+                 .and_then(|val| val.as_object()) //secret
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1347,7 +1347,7 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1428,7 +1428,7 @@ impl
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1438,7 +1438,7 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -3354,7 +3354,7 @@ impl transformers::ForeignTryFrom<&RouterData<api::Void, PaymentsCancelData, Pay
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+
+From 48afa51057745360ddb8df9d19aaaedb614f6c92 Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Thu, 13 Nov 2025 14:36:57 +0530
+Subject: [PATCH 2/4] chore: lints
+
+---
+ .../unified_connector_service/transformers.rs | 144 ++++++++++++++++--
+ 1 file changed, 128 insertions(+), 16 deletions(-)
+
+diff --git a/crates/router/src/core/unified_connector_service/transformers.rs b/crates/router/src/core/unified_connector_service/transformers.rs
+index 8b4ca1bfa38..84ff3446889 100644
+--- a/crates/router/src/core/unified_connector_service/transformers.rs
++++ b/crates/router/src/core/unified_connector_service/transformers.rs
+@@ -483,7 +483,14 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -572,7 +579,14 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -656,7 +670,14 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -667,7 +688,14 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -757,7 +785,14 @@ impl transformers::ForeignTryFrom<&RouterData<Capture, PaymentsCaptureData, Paym
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -829,7 +864,14 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -840,7 +882,14 @@ impl
+             .and_then(|val| val.as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -960,7 +1009,14 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -971,7 +1027,14 @@ impl
+             .and_then(|val| val.as_object())
+             .map(|map| {
+                 map.iter()
+-                    .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                    .map(|(k, v)| {
++                        (
++                            k.clone(),
++                            v.as_str()
++                                .map(|s| s.to_string())
++                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
++                        )
++                    })
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -1207,7 +1270,14 @@ impl
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1217,7 +1287,14 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1316,7 +1393,14 @@ impl
+                 .and_then(|val| val.as_object()) //secret
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1347,7 +1431,14 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1428,7 +1519,14 @@ impl
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1438,7 +1536,14 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -3354,7 +3459,14 @@ impl transformers::ForeignTryFrom<&RouterData<api::Void, PaymentsCancelData, Pay
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .map(|(k, v)| (k.clone(), v.as_str().map(|s| s.to_string()).unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default())))
++                        .map(|(k, v)| {
++                            (
++                                k.clone(),
++                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
++                                    serde_json::to_string(v).unwrap_or_default()
++                                }),
++                            )
++                        })
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+
+From a9edcdc3c9b88c6c002f84f6d87339d910e04a2e Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Thu, 20 Nov 2025 12:10:52 +0530
+Subject: [PATCH 3/4] refactor: address comments by converting from serde value
+ to hashmap
+
+---
+ .../unified_connector_service/transformers.rs | 312 ++++--------------
+ 1 file changed, 69 insertions(+), 243 deletions(-)
+
+diff --git a/crates/router/src/core/unified_connector_service/transformers.rs b/crates/router/src/core/unified_connector_service/transformers.rs
+index 84ff3446889..f8f3de77ba6 100644
+--- a/crates/router/src/core/unified_connector_service/transformers.rs
++++ b/crates/router/src/core/unified_connector_service/transformers.rs
+@@ -44,6 +44,37 @@ use crate::{
+     },
+ };
+ 
++/// Utility function to convert serde_json::Value map to HashMap<String, String>
++/// Propagates serialization errors instead of using defaults
++fn convert_value_map_to_hashmap(
++    value: &serde_json::Value,
++) -> Result<HashMap<String, String>, error_stack::Report<UnifiedConnectorServiceError>> {
++    match value.as_object() {
++        Some(map) => map
++            .iter()
++            .map(|(k, v)| {
++                let string_value = v
++                    .as_str()
++                    .map(|s| s.to_string())
++                    .or_else(|| {
++                        serde_json::to_string(v)
++                            .ok()
++                    })
++                    .ok_or_else(|| {
++                        error_stack::Report::new(
++                            UnifiedConnectorServiceError::RequestEncodingFailedWithReason(format!(
++                                "Failed to serialize metadata value for key: {}",
++                                k
++                            ))
++                        )
++                    })?;
++                Ok::<_, error_stack::Report<UnifiedConnectorServiceError>>((k.clone(), string_value))
++            })
++            .collect::<Result<HashMap<String, String>, error_stack::Report<UnifiedConnectorServiceError>>>(),
++        None => Ok(HashMap::new()),
++    }
++}
++
+ impl ForeignFrom<&payments_grpc::AccessToken> for AccessToken {
+     fn foreign_from(grpc_token: &payments_grpc::AccessToken) -> Self {
+         Self {
+@@ -480,19 +511,8 @@ impl
+         let merchant_account_metadata = router_data
+             .connector_meta_data
+             .as_ref()
+-            .and_then(|val| val.peek().as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val.peek()))
++            .transpose()?
+             .unwrap_or_default();
+         Ok(Self {
+             request_ref_id: Some(Identifier {
+@@ -576,19 +596,8 @@ impl
+         let merchant_account_metadata = router_data
+             .connector_meta_data
+             .as_ref()
+-            .and_then(|val| val.peek().as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val.peek()))
++            .transpose()?
+             .unwrap_or_default();
+         Ok(Self {
+             request_ref_id: Some(Identifier {
+@@ -667,37 +676,15 @@ impl
+         let merchant_account_metadata = router_data
+             .connector_meta_data
+             .as_ref()
+-            .and_then(|val| val.peek().as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val.peek()))
++            .transpose()?
+             .unwrap_or_default();
+         let metadata = router_data
+             .request
+             .metadata
+             .as_ref()
+-            .and_then(|val| val.peek().as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val.peek()))
++            .transpose()?
+             .unwrap_or_default();
+         Ok(Self {
+             request_ref_id: Some(Identifier {
+@@ -782,19 +769,8 @@ impl transformers::ForeignTryFrom<&RouterData<Capture, PaymentsCaptureData, Paym
+                 .request
+                 .metadata
+                 .as_ref()
+-                .and_then(|val| val.as_object())
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|val| convert_value_map_to_hashmap(val))
++                .transpose()?
+                 .unwrap_or_default(),
+             browser_info,
+             multiple_capture_data: router_data.request.multiple_capture_data.as_ref().map(
+@@ -861,37 +837,15 @@ impl
+         let merchant_account_metadata = router_data
+             .connector_meta_data
+             .as_ref()
+-            .and_then(|val| val.peek().as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val.peek()))
++            .transpose()?
+             .unwrap_or_default();
+         let metadata = router_data
+             .request
+             .metadata
+             .as_ref()
+-            .and_then(|val| val.as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val))
++            .transpose()?
+             .unwrap_or_default();
+         let authentication_data = router_data
+             .request
+@@ -1006,37 +960,15 @@ impl
+         let merchant_account_metadata = router_data
+             .connector_meta_data
+             .as_ref()
+-            .and_then(|val| val.peek().as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val.peek()))
++            .transpose()?
+             .unwrap_or_default();
+         let metadata = router_data
+             .request
+             .metadata
+             .as_ref()
+-            .and_then(|val| val.as_object())
+-            .map(|map| {
+-                map.iter()
+-                    .map(|(k, v)| {
+-                        (
+-                            k.clone(),
+-                            v.as_str()
+-                                .map(|s| s.to_string())
+-                                .unwrap_or_else(|| serde_json::to_string(v).unwrap_or_default()),
+-                        )
+-                    })
+-                    .collect::<HashMap<String, String>>()
+-            })
++            .map(|val| convert_value_map_to_hashmap(val))
++            .transpose()?
+             .unwrap_or_default();
+         let setup_future_usage = router_data
+             .request
+@@ -1267,36 +1199,14 @@ impl
+                 .request
+                 .metadata
+                 .as_ref()
+-                .and_then(|val| val.as_object())
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|val| convert_value_map_to_hashmap(val))
++                .transpose()?
+                 .unwrap_or_default(),
+             merchant_account_metadata: router_data
+                 .connector_meta_data
+                 .as_ref()
+-                .and_then(|meta| meta.peek().as_object())
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|meta| convert_value_map_to_hashmap(meta.peek()))
++                .transpose()?
+                 .unwrap_or_default(),
+             test_mode: router_data.test_mode,
+             connector_customer_id: router_data.connector_customer.clone(),
+@@ -1389,20 +1299,8 @@ impl
+                 .request
+                 .metadata
+                 .as_ref()
+-                .map(|secret| secret.peek())
+-                .and_then(|val| val.as_object()) //secret
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|secret| convert_value_map_to_hashmap(secret.peek()))
++                .transpose()?
+                 .unwrap_or_default(),
+             return_url: router_data.request.router_return_url.clone(),
+             webhook_url: router_data.request.webhook_url.clone(),
+@@ -1428,19 +1326,8 @@ impl
+             merchant_account_metadata: router_data
+                 .connector_meta_data
+                 .as_ref()
+-                .and_then(|meta| meta.peek().as_object())
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|meta| convert_value_map_to_hashmap(meta.peek()))
++                .transpose()?
+                 .unwrap_or_default(),
+             connector_customer_id: router_data.connector_customer.clone(),
+             state,
+@@ -1516,36 +1403,14 @@ impl
+                 .request
+                 .metadata
+                 .as_ref()
+-                .and_then(|val| val.as_object())
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|val| convert_value_map_to_hashmap(val))
++                .transpose()?
+                 .unwrap_or_default(),
+             merchant_account_metadata: router_data
+                 .connector_meta_data
+                 .as_ref()
+-                .and_then(|meta| meta.peek().as_object())
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|meta| convert_value_map_to_hashmap(meta.peek()))
++                .transpose()?
+                 .unwrap_or_default(),
+             webhook_url: router_data.request.webhook_url.clone(),
+             capture_method: capture_method.map(|capture_method| capture_method.into()),
+@@ -3189,16 +3054,8 @@ impl transformers::ForeignTryFrom<&RouterData<Execute, RefundsData, RefundsRespo
+             .request
+             .connector_metadata
+             .as_ref()
+-            .map(|metadata| {
+-                metadata
+-                    .as_object()
+-                    .map(|obj| {
+-                        obj.iter()
+-                            .map(|(k, v)| (k.clone(), v.to_string()))
+-                            .collect()
+-                    })
+-                    .unwrap_or_default()
+-            })
++            .map(|metadata| convert_value_map_to_hashmap(metadata))
++            .transpose()?
+             .unwrap_or_default();
+ 
+         // Convert refund_connector_metadata to gRPC format
+@@ -3206,18 +3063,8 @@ impl transformers::ForeignTryFrom<&RouterData<Execute, RefundsData, RefundsRespo
+             .request
+             .refund_connector_metadata
+             .as_ref()
+-            .map(|metadata| {
+-                metadata
+-                    .clone()
+-                    .expose()
+-                    .as_object()
+-                    .map(|obj| {
+-                        obj.iter()
+-                            .map(|(k, v)| (k.clone(), v.to_string()))
+-                            .collect()
+-                    })
+-                    .unwrap_or_default()
+-            })
++            .map(|metadata| convert_value_map_to_hashmap(&metadata.clone().expose()))
++            .transpose()?
+             .unwrap_or_default();
+ 
+         let state = router_data
+@@ -3345,18 +3192,8 @@ impl transformers::ForeignTryFrom<&RouterData<RSync, RefundsData, RefundsRespons
+                 .request
+                 .refund_connector_metadata
+                 .as_ref()
+-                .map(|metadata| {
+-                    metadata
+-                        .clone()
+-                        .expose()
+-                        .as_object()
+-                        .map(|obj| {
+-                            obj.iter()
+-                                .map(|(k, v)| (k.clone(), v.to_string()))
+-                                .collect()
+-                        })
+-                        .unwrap_or_default()
+-                })
++                .map(|metadata| convert_value_map_to_hashmap(&metadata.clone().expose()))
++                .transpose()?
+                 .unwrap_or_default(),
+         })
+     }
+@@ -3456,19 +3293,8 @@ impl transformers::ForeignTryFrom<&RouterData<api::Void, PaymentsCancelData, Pay
+                 .request
+                 .metadata
+                 .as_ref()
+-                .and_then(|val| val.as_object())
+-                .map(|map| {
+-                    map.iter()
+-                        .map(|(k, v)| {
+-                            (
+-                                k.clone(),
+-                                v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
+-                                    serde_json::to_string(v).unwrap_or_default()
+-                                }),
+-                            )
+-                        })
+-                        .collect::<HashMap<String, String>>()
+-                })
++                .map(|val| convert_value_map_to_hashmap(val))
++                .transpose()?
+                 .unwrap_or_default(),
+             state: None,
+         })
+
+From 760bdd36cd4979195b294d03f06bbae9b22a356c Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Thu, 20 Nov 2025 14:02:29 +0530
+Subject: [PATCH 4/4] chore: lints
+
+---
+ .../core/unified_connector_service/transformers.rs | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/crates/router/src/core/unified_connector_service/transformers.rs b/crates/router/src/core/unified_connector_service/transformers.rs
+index f8f3de77ba6..11164068466 100644
+--- a/crates/router/src/core/unified_connector_service/transformers.rs
++++ b/crates/router/src/core/unified_connector_service/transformers.rs
+@@ -769,7 +769,7 @@ impl transformers::ForeignTryFrom<&RouterData<Capture, PaymentsCaptureData, Paym
+                 .request
+                 .metadata
+                 .as_ref()
+-                .map(|val| convert_value_map_to_hashmap(val))
++                .map(convert_value_map_to_hashmap)
+                 .transpose()?
+                 .unwrap_or_default(),
+             browser_info,
+@@ -844,7 +844,7 @@ impl
+             .request
+             .metadata
+             .as_ref()
+-            .map(|val| convert_value_map_to_hashmap(val))
++            .map(convert_value_map_to_hashmap)
+             .transpose()?
+             .unwrap_or_default();
+         let authentication_data = router_data
+@@ -967,7 +967,7 @@ impl
+             .request
+             .metadata
+             .as_ref()
+-            .map(|val| convert_value_map_to_hashmap(val))
++            .map(convert_value_map_to_hashmap)
+             .transpose()?
+             .unwrap_or_default();
+         let setup_future_usage = router_data
+@@ -1199,7 +1199,7 @@ impl
+                 .request
+                 .metadata
+                 .as_ref()
+-                .map(|val| convert_value_map_to_hashmap(val))
++                .map(convert_value_map_to_hashmap)
+                 .transpose()?
+                 .unwrap_or_default(),
+             merchant_account_metadata: router_data
+@@ -1403,7 +1403,7 @@ impl
+                 .request
+                 .metadata
+                 .as_ref()
+-                .map(|val| convert_value_map_to_hashmap(val))
++                .map(convert_value_map_to_hashmap)
+                 .transpose()?
+                 .unwrap_or_default(),
+             merchant_account_metadata: router_data
+@@ -3054,7 +3054,7 @@ impl transformers::ForeignTryFrom<&RouterData<Execute, RefundsData, RefundsRespo
+             .request
+             .connector_metadata
+             .as_ref()
+-            .map(|metadata| convert_value_map_to_hashmap(metadata))
++            .map(convert_value_map_to_hashmap)
+             .transpose()?
+             .unwrap_or_default();
+ 
+@@ -3293,7 +3293,7 @@ impl transformers::ForeignTryFrom<&RouterData<api::Void, PaymentsCancelData, Pay
+                 .request
+                 .metadata
+                 .as_ref()
+-                .map(|val| convert_value_map_to_hashmap(val))
++                .map(convert_value_map_to_hashmap)
+                 .transpose()?
+                 .unwrap_or_default(),
+             state: None,

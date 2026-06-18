@@ -1,0 +1,155 @@
+{
+  "row_index": 12,
+  "repo": "juspay/hyperswitch",
+  "pr_number": "10454",
+  "base_sha": "57be3d01a0c6f10ae99250bf40a7da1e7592d11f",
+  "head_sha": "2ac3d0105407560dd03cf494cc0a599428f6ccaa",
+  "model": "litellm/open-large",
+  "status": "ok",
+  "output_dir": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/results_full_40tasks/row_0012_pr_10454",
+  "worktree": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0012_pr_10454",
+  "agent_attempts": 1,
+  "agent_empty_patch_retries": 0,
+  "agent_returncode": 0,
+  "agent_elapsed_seconds": 868.7,
+  "has_patch": true,
+  "num_changed_files": 16,
+  "changed_files": [
+    "crates/router/src/core/payments/flows/authorize_flow.rs",
+    "crates/router/src/core/payments/flows/cancel_flow.rs",
+    "crates/router/src/core/payments/flows/capture_flow.rs",
+    "crates/router/src/core/payments/flows/complete_authorize_flow.rs",
+    "crates/router/src/core/payments/flows/external_proxy_flow.rs",
+    "crates/router/src/core/payments/flows/psync_flow.rs",
+    "crates/router/src/core/payments/flows/setup_mandate_flow.rs",
+    "crates/router/src/core/payments/gateway/access_token_gateway.rs",
+    "crates/router/src/core/payments/gateway/authorize_gateway.rs",
+    "crates/router/src/core/payments/gateway/create_customer_gateway.rs",
+    "crates/router/src/core/payments/gateway/create_order_gateway.rs",
+    "crates/router/src/core/payments/gateway/payment_method_token_create_gateway.rs",
+    "crates/router/src/core/payments/gateway/psync_gateway.rs",
+    "crates/router/src/core/payments/gateway/session_token_gateway.rs",
+    "crates/router/src/core/payments/gateway/setup_mandate.rs",
+    "crates/router/src/core/unified_connector_service.rs"
+  ],
+  "file_f1": 1.0,
+  "file_recall": 1.0,
+  "added_line_f1": 0.171,
+  "removed_line_f1": 0.093,
+  "style_score": 10.0,
+  "compilation_summary": {
+    "passed": 1,
+    "total": 2,
+    "all_passed": false
+  },
+  "review_available": true,
+  "judge_count": 8,
+  "judge_aggregate": {
+    "judge_count": 8,
+    "valid_judges": 8,
+    "raw_scores": {
+      "correctness": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        9.0
+      ],
+      "completeness": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "convention_adherence": [
+        8.0,
+        9.0,
+        9.0,
+        8.0,
+        8.0,
+        8.0,
+        9.0,
+        3.0
+      ],
+      "hygiene": [
+        9.0,
+        10.0,
+        10.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "overall": [
+        9.45,
+        9.8,
+        9.8,
+        9.45,
+        9.45,
+        9.45,
+        9.65,
+        8.1
+      ]
+    },
+    "mean": {
+      "correctness": 9.875,
+      "completeness": 10.0,
+      "convention_adherence": 7.75,
+      "hygiene": 9.25,
+      "overall": 9.394
+    },
+    "std_dev": {
+      "correctness": 0.354,
+      "completeness": 0.0,
+      "convention_adherence": 1.982,
+      "hygiene": 0.463,
+      "overall": 0.545
+    },
+    "median": {
+      "correctness": 10.0,
+      "completeness": 10.0,
+      "convention_adherence": 8.0,
+      "hygiene": 9.0,
+      "overall": 9.45
+    },
+    "outliers_excluded": {
+      "correctness": [
+        3
+      ],
+      "completeness": [],
+      "convention_adherence": [
+        3
+      ],
+      "hygiene": [
+        4,
+        6
+      ],
+      "overall": [
+        3
+      ]
+    },
+    "outlier_explanations": {
+      "correctness": "Excluded 1 outlier(s): judge 3 scored 9.0 (low). Bounds: [10.0, 10.0] computed from IQR with multiplier 1.5.",
+      "completeness": "No outliers detected. All scores within [Q1-1.5*IQR, Q3+1.5*IQR] = [10.0, 10.0].",
+      "convention_adherence": "Excluded 1 outlier(s): judge 3 scored 3.0 (low). Bounds: [6.5, 10.5] computed from IQR with multiplier 1.5.",
+      "hygiene": "Excluded 2 outlier(s): judge 4 scored 10.0 (high), judge 6 scored 10.0 (high). Bounds: [8.62, 9.62] computed from IQR with multiplier 1.5.",
+      "overall": "Excluded 1 outlier(s): judge 3 scored 8.1 (low). Bounds: [9.09, 10.04] computed from IQR with multiplier 1.5."
+    },
+    "final_score": {
+      "correctness": 10.0,
+      "completeness": 10.0,
+      "convention_adherence": 8.429,
+      "hygiene": 9.0,
+      "overall": 9.579
+    }
+  },
+  "elapsed_seconds": 1245.54
+}

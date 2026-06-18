@@ -1,0 +1,240 @@
+From 527a1636450c1b4131ee8a6dcdc0f39cf228d6aa Mon Sep 17 00:00:00 2001
+From: Gaurav Rawat <104276743+GauravRawat369@users.noreply.github.com>
+Date: Sat, 14 Feb 2026 19:30:47 +0530
+Subject: [PATCH 1/2] fix(payment-methods): update fingerprint data handling in
+ payment method creation
+
+---
+ crates/hyperswitch_domain_models/src/vault.rs | 42 +++++++++++++++++++
+ crates/router/src/core/payment_methods.rs     |  4 +-
+ 2 files changed, 45 insertions(+), 1 deletion(-)
+
+diff --git a/crates/hyperswitch_domain_models/src/vault.rs b/crates/hyperswitch_domain_models/src/vault.rs
+index 19ed9fb7460..25b2e11b073 100644
+--- a/crates/hyperswitch_domain_models/src/vault.rs
++++ b/crates/hyperswitch_domain_models/src/vault.rs
+@@ -15,6 +15,22 @@ pub enum PaymentMethodVaultingData {
+     NetworkToken(payment_method_data::NetworkTokenDetails),
+     CardNumber(cards::CardNumber),
+ }
++#[derive(Debug, Deserialize, Serialize, Clone)]
++pub enum FingerprintData {
++    Card {
++        card_number: cards::CardNumber,
++        card_exp_month: masking::Secret<String>,
++        card_exp_year: masking::Secret<String>,
++    },
++    NetworkToken {
++        network_token: cards::NetworkToken,
++        network_token_exp_month: masking::Secret<String>,
++        network_token_exp_year: masking::Secret<String>,
++    },
++    CardNumber {
++        card_number: cards::CardNumber,
++    },
++}
+ 
+ impl PaymentMethodVaultingData {
+     pub fn get_card(&self) -> Option<&payment_methods::CardDetail> {
+@@ -134,6 +150,23 @@ impl PaymentMethodVaultingData {
+             ),
+         }
+     }
++    pub fn to_fingerprint_data(&self) -> FingerprintData {
++        match self {
++            Self::Card(card) => FingerprintData::Card {
++                card_number: card.card_number.clone(),
++                card_exp_month: card.card_exp_month.clone(),
++                card_exp_year: card.card_exp_year.clone(),
++            },
++            Self::NetworkToken(nt) => FingerprintData::NetworkToken {
++                network_token: nt.network_token.clone(),
++                network_token_exp_month: nt.network_token_exp_month.clone(),
++                network_token_exp_year: nt.network_token_exp_year.clone(),
++            },
++            Self::CardNumber(card_number) => FingerprintData::CardNumber {
++                card_number: card_number.clone(),
++            },
++        }
++    }
+ }
+ 
+ #[derive(Debug, Deserialize, Serialize, Clone)]
+@@ -177,6 +210,15 @@ impl VaultingDataInterface for PaymentMethodVaultingData {
+         }
+     }
+ }
++impl VaultingDataInterface for FingerprintData {
++    fn get_vaulting_data_key(&self) -> String {
++        match self {
++            Self::Card { card_number, .. } => card_number.to_string(),
++            Self::NetworkToken { network_token, .. } => network_token.to_string(),
++            Self::CardNumber { card_number } => card_number.to_string(),
++        }
++    }
++}
+ 
+ #[cfg(feature = "v2")]
+ impl TryFrom<payment_methods::PaymentMethodCreateData> for PaymentMethodVaultingData {
+diff --git a/crates/router/src/core/payment_methods.rs b/crates/router/src/core/payment_methods.rs
+index 11cd3535e41..31686e09309 100644
+--- a/crates/router/src/core/payment_methods.rs
++++ b/crates/router/src/core/payment_methods.rs
+@@ -1308,9 +1308,11 @@ async fn create_or_fetch_payment_method_core(
+ 
+     let payment_method_data = bin_enriched_payment_method_data.data;
+ 
++    let fingerprint_data = payment_method_data.to_fingerprint_data();
++
+     let fingerprint_id = vault::get_fingerprint_id_from_vault(
+         state,
+-        &payment_method_data,
++        &fingerprint_data,
+         customer_id.get_string_repr().to_owned(),
+     )
+     .await
+
+From b4c68cf04eed3055406df4c042578d6e42b57eb3 Mon Sep 17 00:00:00 2001
+From: Gaurav Rawat <104276743+GauravRawat369@users.noreply.github.com>
+Date: Sat, 14 Feb 2026 22:59:10 +0530
+Subject: [PATCH 2/2] fix(payment-methods): refactor fingerprint ID retrieval
+ for payment method creation
+
+---
+ crates/hyperswitch_domain_models/src/vault.rs | 48 ++++++++++---------
+ crates/router/src/core/payment_methods.rs     |  8 ++--
+ .../router/src/core/payment_methods/vault.rs  | 13 ++++-
+ 3 files changed, 40 insertions(+), 29 deletions(-)
+
+diff --git a/crates/hyperswitch_domain_models/src/vault.rs b/crates/hyperswitch_domain_models/src/vault.rs
+index 25b2e11b073..a726e7a59ef 100644
+--- a/crates/hyperswitch_domain_models/src/vault.rs
++++ b/crates/hyperswitch_domain_models/src/vault.rs
+@@ -17,19 +17,23 @@ pub enum PaymentMethodVaultingData {
+ }
+ #[derive(Debug, Deserialize, Serialize, Clone)]
+ pub enum FingerprintData {
+-    Card {
+-        card_number: cards::CardNumber,
+-        card_exp_month: masking::Secret<String>,
+-        card_exp_year: masking::Secret<String>,
+-    },
+-    NetworkToken {
+-        network_token: cards::NetworkToken,
+-        network_token_exp_month: masking::Secret<String>,
+-        network_token_exp_year: masking::Secret<String>,
+-    },
+-    CardNumber {
+-        card_number: cards::CardNumber,
+-    },
++    Card(FingerprintCardData),
++    NetworkToken(FingerprintNetworkTokenData),
++    CardNumber(cards::CardNumber),
++}
++
++#[derive(Debug, Default, Deserialize, Serialize, Clone)]
++pub struct FingerprintCardData {
++    card_number: cards::CardNumber,
++    card_exp_month: masking::Secret<String>,
++    card_exp_year: masking::Secret<String>,
++}
++
++#[derive(Debug, Default, Deserialize, Serialize, Clone)]
++pub struct FingerprintNetworkTokenData {
++    network_token: cards::NetworkToken,
++    network_token_exp_month: masking::Secret<String>,
++    network_token_exp_year: masking::Secret<String>,
+ }
+ 
+ impl PaymentMethodVaultingData {
+@@ -152,19 +156,17 @@ impl PaymentMethodVaultingData {
+     }
+     pub fn to_fingerprint_data(&self) -> FingerprintData {
+         match self {
+-            Self::Card(card) => FingerprintData::Card {
++            Self::Card(card) => FingerprintData::Card(FingerprintCardData {
+                 card_number: card.card_number.clone(),
+                 card_exp_month: card.card_exp_month.clone(),
+                 card_exp_year: card.card_exp_year.clone(),
+-            },
+-            Self::NetworkToken(nt) => FingerprintData::NetworkToken {
++            }),
++            Self::NetworkToken(nt) => FingerprintData::NetworkToken(FingerprintNetworkTokenData {
+                 network_token: nt.network_token.clone(),
+                 network_token_exp_month: nt.network_token_exp_month.clone(),
+                 network_token_exp_year: nt.network_token_exp_year.clone(),
+-            },
+-            Self::CardNumber(card_number) => FingerprintData::CardNumber {
+-                card_number: card_number.clone(),
+-            },
++            }),
++            Self::CardNumber(card_number) => FingerprintData::CardNumber(card_number.clone()),
+         }
+     }
+ }
+@@ -213,9 +215,9 @@ impl VaultingDataInterface for PaymentMethodVaultingData {
+ impl VaultingDataInterface for FingerprintData {
+     fn get_vaulting_data_key(&self) -> String {
+         match self {
+-            Self::Card { card_number, .. } => card_number.to_string(),
+-            Self::NetworkToken { network_token, .. } => network_token.to_string(),
+-            Self::CardNumber { card_number } => card_number.to_string(),
++            Self::Card(card) => card.card_number.to_string(),
++            Self::NetworkToken(network_token) => network_token.network_token.to_string(),
++            Self::CardNumber(card_number) => card_number.to_string(),
+         }
+     }
+ }
+diff --git a/crates/router/src/core/payment_methods.rs b/crates/router/src/core/payment_methods.rs
+index 31686e09309..bb6c43b63e9 100644
+--- a/crates/router/src/core/payment_methods.rs
++++ b/crates/router/src/core/payment_methods.rs
+@@ -1308,11 +1308,9 @@ async fn create_or_fetch_payment_method_core(
+ 
+     let payment_method_data = bin_enriched_payment_method_data.data;
+ 
+-    let fingerprint_data = payment_method_data.to_fingerprint_data();
+-
+-    let fingerprint_id = vault::get_fingerprint_id_from_vault(
++    let fingerprint_id = vault::get_fingerprint_id_for_payment_method(
+         state,
+-        &fingerprint_data,
++        &payment_method_data,
+         customer_id.get_string_repr().to_owned(),
+     )
+     .await
+@@ -4125,7 +4123,7 @@ pub async fn update_payment_method_core(
+                 // cannot use async map because of problems related to lifetimes
+                 // to overcome this, we will have to use a move closure and add some clones
+                 Some(ref vault_request_data_req) => {
+-                    let fingerprint_id_from_vault = vault::get_fingerprint_id_from_vault(
++                    let fingerprint_id_from_vault = vault::get_fingerprint_id_for_payment_method(
+                         state,
+                         vault_request_data_req,
+                         payment_method
+diff --git a/crates/router/src/core/payment_methods/vault.rs b/crates/router/src/core/payment_methods/vault.rs
+index f9a05d235a7..584bea687d9 100644
+--- a/crates/router/src/core/payment_methods/vault.rs
++++ b/crates/router/src/core/payment_methods/vault.rs
+@@ -1536,9 +1536,20 @@ pub async fn call_to_vault<V: pm_types::VaultingInterface>(
+     Ok(decrypted_payload)
+ }
+ 
++#[cfg(feature = "v2")]
++pub async fn get_fingerprint_id_for_payment_method(
++    state: &routes::SessionState,
++    payment_method_data: &domain::PaymentMethodVaultingData,
++    customer_id: String,
++) -> CustomResult<String, errors::VaultError> {
++    let fingerprint_data = payment_method_data.to_fingerprint_data();
++
++    get_fingerprint_id_from_vault(state, &fingerprint_data, customer_id).await
++}
++
+ #[cfg(feature = "v2")]
+ #[instrument(skip_all)]
+-pub async fn get_fingerprint_id_from_vault<D: domain::VaultingDataInterface + serde::Serialize>(
++async fn get_fingerprint_id_from_vault<D: domain::VaultingDataInterface + serde::Serialize>(
+     state: &routes::SessionState,
+     data: &D,
+     key: String,

@@ -1,0 +1,41 @@
+diff --git a/crates/common_types/src/payments.rs b/crates/common_types/src/payments.rs
+index 766e9c7c1d..e573abc1d8 100644
+--- a/crates/common_types/src/payments.rs
++++ b/crates/common_types/src/payments.rs
+@@ -896,8 +896,10 @@ pub struct BillingDescriptor {
+     pub phone: Option<Secret<String>>,
+     /// a short description for the payment
+     pub statement_descriptor: Option<String>,
+-    /// Concatenated with the prefix (shortened descriptor) or statement descriptor that’s set on the account to form the complete statement descriptor.
++    /// Concatenated with the prefix (shortened descriptor) or statement descriptor that's set on the account to form the complete statement descriptor.
+     pub statement_descriptor_suffix: Option<String>,
++    /// A reference for the billing descriptor that appears on the customer's billing statement
++    pub reference: Option<String>,
+ }
+ 
+ impl_to_sql_from_sql_json!(BillingDescriptor);
+diff --git a/crates/hyperswitch_connectors/src/connectors/checkout/transformers.rs b/crates/hyperswitch_connectors/src/connectors/checkout/transformers.rs
+index 1e0b8d4537..5657941c32 100644
+--- a/crates/hyperswitch_connectors/src/connectors/checkout/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/checkout/transformers.rs
+@@ -823,7 +823,7 @@ impl TryFrom<&CheckoutRouterData<&PaymentsAuthorizeRouterData>> for PaymentsRequ
+                 .map(|descriptor| CheckoutBillingDescriptor {
+                     name: descriptor.name.clone(),
+                     city: descriptor.city.clone(),
+-                    reference: descriptor.statement_descriptor.clone(),
++                    reference: descriptor.reference.clone(),
+                 });
+ 
+         let request = Self {
+diff --git a/crates/hyperswitch_domain_models/src/payments.rs b/crates/hyperswitch_domain_models/src/payments.rs
+index 51a8a371e7..98f1bd024b 100644
+--- a/crates/hyperswitch_domain_models/src/payments.rs
++++ b/crates/hyperswitch_domain_models/src/payments.rs
+@@ -311,6 +311,7 @@ impl PaymentIntent {
+                     .statement_descriptor_suffix
+                     .clone()
+                     .or_else(|| self.statement_descriptor_suffix.clone()),
++                reference: descriptor.reference.clone(),
+             })
+     }
+ }

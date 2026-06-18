@@ -1,0 +1,121 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 7f1c523e2e..a80f8df311 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2129,7 +2129,7 @@ dependencies = [
+ [[package]]
+ name = "config_patch_derive"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=00ffd3b1d753f72a93b3882585b3eda2a9c9ec55#00ffd3b1d753f72a93b3882585b3eda2a9c9ec55"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+@@ -3800,7 +3800,7 @@ dependencies = [
+ [[package]]
+ name = "grpc-api-types"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=00ffd3b1d753f72a93b3882585b3eda2a9c9ec55#00ffd3b1d753f72a93b3882585b3eda2a9c9ec55"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "axum 0.8.4",
+  "error-stack 0.5.0",
+@@ -7473,7 +7473,7 @@ dependencies = [
+ [[package]]
+ name = "rust-grpc-client"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=00ffd3b1d753f72a93b3882585b3eda2a9c9ec55#00ffd3b1d753f72a93b3882585b3eda2a9c9ec55"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "grpc-api-types",
+ ]
+@@ -10263,7 +10263,7 @@ checksum = "ed646292ffc8188ef8ea4d1e0e0150fb15a5c2e12ad9b8fc191ae7a8a7f3c4b9"
+ [[package]]
+ name = "ucs_cards"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=00ffd3b1d753f72a93b3882585b3eda2a9c9ec55#00ffd3b1d753f72a93b3882585b3eda2a9c9ec55"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "bytes 1.10.1",
+  "error-stack 0.4.1",
+@@ -10279,7 +10279,7 @@ dependencies = [
+ [[package]]
+ name = "ucs_common_enums"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=00ffd3b1d753f72a93b3882585b3eda2a9c9ec55#00ffd3b1d753f72a93b3882585b3eda2a9c9ec55"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "serde",
+  "strum 0.26.3",
+@@ -10290,7 +10290,7 @@ dependencies = [
+ [[package]]
+ name = "ucs_common_utils"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=00ffd3b1d753f72a93b3882585b3eda2a9c9ec55#00ffd3b1d753f72a93b3882585b3eda2a9c9ec55"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "anyhow",
+  "base64 0.21.7",
+diff --git a/crates/external_services/Cargo.toml b/crates/external_services/Cargo.toml
+index 3d5b584878..bfd6b21956 100644
+--- a/crates/external_services/Cargo.toml
++++ b/crates/external_services/Cargo.toml
+@@ -69,7 +69,7 @@ reqwest = { version = "0.11.27", features = ["rustls-tls"] }
+ http = "0.2.12"
+ url = { version = "2.5.4", features = ["serde"] }
+ quick-xml = { version = "0.31.0", features = ["serialize"] }
+-unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "00ffd3b1d753f72a93b3882585b3eda2a9c9ec55", package = "rust-grpc-client" }
++unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "rust-grpc-client" }
+ open-feature = { version = "0.2.5", optional = true }
+ superposition_provider = { version = "0.88.1", optional = true }
+ 
+diff --git a/crates/hyperswitch_interfaces/Cargo.toml b/crates/hyperswitch_interfaces/Cargo.toml
+index 75c04d3054..33b67eb097 100644
+--- a/crates/hyperswitch_interfaces/Cargo.toml
++++ b/crates/hyperswitch_interfaces/Cargo.toml
+@@ -30,7 +30,7 @@ strum = { version = "0.26", features = ["derive"] }
+ thiserror = "1.0.69"
+ time = "0.3.41"
+ url = { version = "2.5.4", features = ["serde"] }
+-unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "00ffd3b1d753f72a93b3882585b3eda2a9c9ec55", package = "rust-grpc-client" }
++unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "rust-grpc-client" }
+ unified-connector-service-masking = { git = "https://github.com/juspay/hyperswitch", tag = "2025.11.24.0", package = "masking" }
+ tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
+ 
+diff --git a/crates/router/Cargo.toml b/crates/router/Cargo.toml
+index 68c0b5b2a0..d94f37fc14 100644
+--- a/crates/router/Cargo.toml
++++ b/crates/router/Cargo.toml
+@@ -88,8 +88,8 @@ reqwest = { version = "0.11.27", features = ["json", "rustls-tls", "gzip", "mult
+ ring = "0.17.14"
+ rust_decimal = { version = "1.37.1", features = ["serde-with-float", "serde-with-str"] }
+ rust-i18n = { git = "https://github.com/kashif-m/rust-i18n", rev = "f2d8096aaaff7a87a847c35a5394c269f75e077a" }
+-unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "00ffd3b1d753f72a93b3882585b3eda2a9c9ec55", package = "rust-grpc-client" }
+-unified-connector-service-cards = { git = "https://github.com/juspay/connector-service", rev = "00ffd3b1d753f72a93b3882585b3eda2a9c9ec55", package = "ucs_cards" }
++unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "rust-grpc-client" }
++unified-connector-service-cards = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "ucs_cards" }
+ unified-connector-service-masking = { git = "https://github.com/juspay/hyperswitch", tag = "2025.11.24.0", package = "masking" }
+ rustc-hash = "1.1.0"
+ rustls = "0.22"
+diff --git a/crates/router/src/core/unified_connector_service.rs b/crates/router/src/core/unified_connector_service.rs
+index 35d4c63dcf..3e43f91230 100644
+--- a/crates/router/src/core/unified_connector_service.rs
++++ b/crates/router/src/core/unified_connector_service.rs
+@@ -779,6 +779,17 @@ pub fn build_unified_connector_service_payment_method(
+                     payment_method: Some(PaymentMethod::Eps(eps)),
+                 })
+             }
++            hyperswitch_domain_models::payment_method_data::BankRedirectData::Sofort { country, preferred_language } => {
++                let sofort = payments_grpc::Sofort {
++                    country: country.and_then(|c| payments_grpc::CountryAlpha2::from_str_name(&c.to_string()))
++                    .map(|country| country.into()),
++                    preferred_language,
++                };
++
++                Ok(payments_grpc::PaymentMethod {
++                    payment_method: Some(PaymentMethod::Sofort(sofort)),
++                })
++            }
+             hyperswitch_domain_models::payment_method_data::BankRedirectData::Przelewy24 { bank_name } => {
+                 let p24 = payments_grpc::Przelewy24 {
+                     bank_name: bank_name.map(payments_grpc::BankNames::foreign_try_from)

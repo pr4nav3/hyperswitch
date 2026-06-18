@@ -1,0 +1,79 @@
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index ca39a18e76..e6757f5eb0 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -7861,7 +7861,7 @@ merchant_secret="Source verification key"
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer.metadata.kid]
+ name = "kid"
+@@ -7907,7 +7907,7 @@ payment_method_type = "interac"
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer_payout.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer_payout.metadata.kid]
+ name = "kid"
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index 8fe1df2f0f..2fdd0e83cb 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -7302,7 +7302,7 @@ options=["Connector"]
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer_payout.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer_payout.metadata.kid]
+ name = "kid"
+@@ -7334,7 +7334,7 @@ type = "Text"
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer.metadata.kid]
+ name = "kid"
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index 9390f93b75..31d7a3a8d7 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -8221,7 +8221,7 @@ options=["Connector"]
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer_payout.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer_payout.metadata.kid]
+ name = "kid"
+@@ -8253,7 +8253,7 @@ type = "Text"
+ api_key = "Client ID"
+ key1 = "Client Secret"
+ [[truelayer.bank_redirect]]
+-payment_method_type = "open_banking_uk"
++payment_method_type = "open_banking"
+ 
+ [truelayer.metadata.kid]
+ name = "kid"
+diff --git a/crates/hyperswitch_connectors/src/connectors/truelayer.rs b/crates/hyperswitch_connectors/src/connectors/truelayer.rs
+index d73553201b..559cbf3e59 100644
+--- a/crates/hyperswitch_connectors/src/connectors/truelayer.rs
++++ b/crates/hyperswitch_connectors/src/connectors/truelayer.rs
+@@ -1068,7 +1068,7 @@ static TRUELAYER_SUPPORTED_PAYMENT_METHODS: LazyLock<SupportedPaymentMethods> =
+         let mut truelayer_supported_payment_methods = SupportedPaymentMethods::new();
+         truelayer_supported_payment_methods.add(
+             enums::PaymentMethod::BankRedirect,
+-            enums::PaymentMethodType::OpenBankingUk,
++            enums::PaymentMethodType::OpenBanking,
+             PaymentMethodDetails {
+                 mandates: common_enums::FeatureStatus::NotSupported,
+                 refunds: common_enums::FeatureStatus::Supported,

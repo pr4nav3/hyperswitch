@@ -1,0 +1,195 @@
+From a374a7fa8ef262888c366f523e888559da98f193 Mon Sep 17 00:00:00 2001
+From: AkshayaFoiger <131388445+AkshayaFoiger@users.noreply.github.com>
+Date: Thu, 8 Jan 2026 12:55:28 +0530
+Subject: [PATCH] fix(router): prevent creation of saved klarna and affirm
+ payment methods (#10813)
+
+Co-authored-by: hyperswitch-bot[bot] <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+---
+ config/deployments/integration_test.toml      |  3 +++
+ config/deployments/production.toml            |  3 +++
+ config/deployments/sandbox.toml               |  3 +++
+ config/development.toml                       |  3 +++
+ config/docker_compose.toml                    |  3 +++
+ crates/common_enums/src/enums.rs              |  7 +++++++
+ .../src/payments/payment_attempt.rs           | 16 +++++++++++++++
+ .../src/configs/secrets_transformers.rs       |  1 +
+ crates/router/src/configs/settings.rs         |  7 +++++++
+ .../payments/operations/payment_response.rs   | 20 +++++++++++++++++++
+ 10 files changed, 66 insertions(+)
+
+diff --git a/config/deployments/integration_test.toml b/config/deployments/integration_test.toml
+index 50cfc5a4af5..f7c5601e3fe 100644
+--- a/config/deployments/integration_test.toml
++++ b/config/deployments/integration_test.toml
+@@ -214,6 +214,9 @@ payout_connector_list = "nomupay,stripe,wise"
+ [delayed_session_response]
+ connectors_with_delayed_session_response = "trustpay,payme"     # List of connectors which have delayed session response
+ 
++[save_payment_method_on_session.unsupported_payment_methods]
++pay_later = ["klarna", "affirm"]
++
+ [zero_mandates.supported_payment_methods]
+ bank_debit.ach = { connector_list = "gocardless,adyen,payload" }
+ bank_debit.becs = { connector_list = "gocardless,adyen" }
+diff --git a/config/deployments/production.toml b/config/deployments/production.toml
+index 5e5182bea16..37897978a6b 100644
+--- a/config/deployments/production.toml
++++ b/config/deployments/production.toml
+@@ -183,6 +183,9 @@ netcetera.base_url = "https://{{merchant_endpoint_prefix}}.3ds-server.prod.netce
+ [delayed_session_response]
+ connectors_with_delayed_session_response = "trustpay,payme"       # List of connectors which have delayed session response
+ 
++[save_payment_method_on_session.unsupported_payment_methods]
++pay_later = ["klarna", "affirm"]
++
+ [dummy_connector]
+ enabled = false                                                         # Whether dummy connector is enabled or not
+ assets_base_url = "https://app.hyperswitch.io/assets/TestProcessor/"    # Base url for dummy connector assets
+diff --git a/config/deployments/sandbox.toml b/config/deployments/sandbox.toml
+index f571977d90c..a373f7aadca 100644
+--- a/config/deployments/sandbox.toml
++++ b/config/deployments/sandbox.toml
+@@ -183,6 +183,9 @@ netcetera.base_url = "https://{{merchant_endpoint_prefix}}.3ds-server.prev.netce
+ [delayed_session_response]
+ connectors_with_delayed_session_response = "trustpay,payme" # List of connectors which have delayed session response
+ 
++[save_payment_method_on_session.unsupported_payment_methods]
++pay_later = ["klarna", "affirm"]
++
+ [dummy_connector]
+ enabled = true                                                          # Whether dummy connector is enabled or not
+ assets_base_url = "https://app.hyperswitch.io/assets/TestProcessor/"    # Base url for dummy connector assets
+diff --git a/config/development.toml b/config/development.toml
+index dec6d0873fc..874379b4522 100644
+--- a/config/development.toml
++++ b/config/development.toml
+@@ -1102,6 +1102,9 @@ discord_invite_url = "https://discord.gg/wJZ7DVW8mm"
+ [delayed_session_response]
+ connectors_with_delayed_session_response = "trustpay,payme"
+ 
++[save_payment_method_on_session.unsupported_payment_methods]
++pay_later = ["klarna", "affirm"]
++
+ [webhook_source_verification_call]
+ connectors_with_webhook_source_verification_call = "paypal"
+ 
+diff --git a/config/docker_compose.toml b/config/docker_compose.toml
+index e576734cd8c..4bd9566beb2 100644
+--- a/config/docker_compose.toml
++++ b/config/docker_compose.toml
+@@ -397,6 +397,9 @@ cards = [
+ [delayed_session_response]
+ connectors_with_delayed_session_response = "trustpay,payme"
+ 
++[save_payment_method_on_session.unsupported_payment_methods]
++pay_later = ["klarna", "affirm"]
++
+ [webhook_source_verification_call]
+ connectors_with_webhook_source_verification_call = "paypal"
+ 
+diff --git a/crates/common_enums/src/enums.rs b/crates/common_enums/src/enums.rs
+index 00886a7398e..1b1d613f9ee 100644
+--- a/crates/common_enums/src/enums.rs
++++ b/crates/common_enums/src/enums.rs
+@@ -2041,6 +2041,13 @@ impl FutureUsage {
+             Self::OnSession => false,
+         }
+     }
++    /// Indicates whether to save the payment method for future use when a customer is present.
++    pub fn is_on_session(self) -> bool {
++        match self {
++            Self::OffSession => false,
++            Self::OnSession => true,
++        }
++    }
+ }
+ 
+ #[derive(
+diff --git a/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs b/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs
+index bdd8b2445e0..0aca34f94ad 100644
+--- a/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs
++++ b/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs
+@@ -1433,6 +1433,22 @@ impl PaymentAttempt {
+             self.payment_method_data.clone()
+         }
+     }
++
++    // Check if the payment method type does not support saving during on-session payments
++    pub fn is_save_payment_method_not_supported_for_on_session(
++        &self,
++        unsupported_payment_methods: &std::collections::HashMap<
++            common_enums::PaymentMethod,
++            std::collections::HashSet<common_enums::PaymentMethodType>,
++        >,
++    ) -> bool {
++        self.payment_method_type.is_some_and(|pm_type| {
++            self.payment_method
++                .as_ref()
++                .and_then(|method| unsupported_payment_methods.get(method))
++                .is_some_and(|unsupported_set| unsupported_set.contains(&pm_type))
++        })
++    }
+ }
+ 
+ #[derive(Clone, Debug, Eq, PartialEq)]
+diff --git a/crates/router/src/configs/secrets_transformers.rs b/crates/router/src/configs/secrets_transformers.rs
+index b1365eabdbe..18605b94fc7 100644
+--- a/crates/router/src/configs/secrets_transformers.rs
++++ b/crates/router/src/configs/secrets_transformers.rs
+@@ -638,5 +638,6 @@ pub(crate) async fn fetch_raw_secrets(
+         internal_services: conf.internal_services,
+         superposition,
+         comparison_service: conf.comparison_service,
++        save_payment_method_on_session: conf.save_payment_method_on_session,
+     }
+ }
+diff --git a/crates/router/src/configs/settings.rs b/crates/router/src/configs/settings.rs
+index 76377b34f4c..822cfd1bedb 100644
+--- a/crates/router/src/configs/settings.rs
++++ b/crates/router/src/configs/settings.rs
+@@ -182,6 +182,13 @@ pub struct Settings<S: SecretState> {
+     pub trace_header: TraceHeaderConfig,
+     pub internal_services: InternalServicesConfig,
+     pub comparison_service: Option<ComparisonServiceConfig>,
++    pub save_payment_method_on_session: OnSessionConfig,
++}
++
++#[derive(Debug, Deserialize, Clone, Default)]
++pub struct OnSessionConfig {
++    pub unsupported_payment_methods:
++        HashMap<enums::PaymentMethod, HashSet<enums::PaymentMethodType>>,
+ }
+ 
+ #[derive(Debug, Deserialize, Clone, Default)]
+diff --git a/crates/router/src/core/payments/operations/payment_response.rs b/crates/router/src/core/payments/operations/payment_response.rs
+index d1e6d173705..329f8fe77e8 100644
+--- a/crates/router/src/core/payments/operations/payment_response.rs
++++ b/crates/router/src/core/payments/operations/payment_response.rs
+@@ -224,6 +224,26 @@ impl<F: Send + Clone> PostUpdateTracker<F, PaymentData<F>, types::PaymentsAuthor
+                 Some(enums::FutureUsage::OffSession)
+             );
+         let storage_scheme = platform.get_processor().get_account().storage_scheme;
++
++        // Skip payment method creation when on-session saving is not supported for the payment method
++        should_avoid_saving = if resp
++            .request
++            .setup_future_usage
++            .map(|usage| usage.is_on_session())
++            .unwrap_or(false)
++            && payment_data
++                .payment_attempt
++                .is_save_payment_method_not_supported_for_on_session(
++                    &state
++                        .conf
++                        .save_payment_method_on_session
++                        .unsupported_payment_methods,
++                ) {
++            true
++        } else {
++            should_avoid_saving
++        };
++
+         if is_legacy_mandate {
+             // Mandate is created on the application side and at the connector.
+             let tokenization::SavePaymentMethodDataResponse {

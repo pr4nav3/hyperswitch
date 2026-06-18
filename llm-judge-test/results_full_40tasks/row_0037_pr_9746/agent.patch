@@ -1,0 +1,91 @@
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index 0004e6a8d3..1097a5e064 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -2887,6 +2887,24 @@ api_secret="Merchant Id"
+   payment_method_type = "google_pay"
+ [[multisafepay.wallet]]
+   payment_method_type = "paypal"
++[[multisafepay.wallet]]
++  payment_method_type = "ali_pay"
++[[multisafepay.wallet]]
++  payment_method_type = "we_chat_pay"
++[[multisafepay.wallet]]
++  payment_method_type = "mb_way"
++[[multisafepay.bank_redirect]]
++  payment_method_type = "trustly"
++[[multisafepay.bank_redirect]]
++  payment_method_type = "eps"
++[[multisafepay.bank_redirect]]
++  payment_method_type = "sofort"
++[[multisafepay.bank_redirect]]
++  payment_method_type = "giropay"
++[[multisafepay.bank_redirect]]
++  payment_method_type = "ideal"
++[[multisafepay.pay_later]]
++  payment_method_type = "klarna"
+ [multisafepay.connector_auth.HeaderKey]
+ api_key="Enter API Key"
+ [multisafepay.connector_webhook_details]
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index 808b41929a..804c7f724c 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -2498,6 +2498,28 @@ payment_method_type = "Discover"
+ payment_method_type = "CartesBancaires"
+ [[multisafepay.debit]]
+ payment_method_type = "UnionPay"
++[[multisafepay.wallet]]
++payment_method_type = "google_pay"
++[[multisafepay.wallet]]
++payment_method_type = "paypal"
++[[multisafepay.wallet]]
++payment_method_type = "ali_pay"
++[[multisafepay.wallet]]
++payment_method_type = "we_chat_pay"
++[[multisafepay.wallet]]
++payment_method_type = "mb_way"
++[[multisafepay.bank_redirect]]
++payment_method_type = "trustly"
++[[multisafepay.bank_redirect]]
++payment_method_type = "eps"
++[[multisafepay.bank_redirect]]
++payment_method_type = "sofort"
++[[multisafepay.bank_redirect]]
++payment_method_type = "giropay"
++[[multisafepay.bank_redirect]]
++payment_method_type = "ideal"
++[[multisafepay.pay_later]]
++payment_method_type = "klarna"
+ [multisafepay.connector_auth.HeaderKey]
+ api_key = "Enter API Key"
+ [multisafepay.connector_webhook_details]
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index 5ee45eb690..a4fbd7175b 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -2863,6 +2863,24 @@ payment_method_type = "UnionPay"
+ payment_method_type = "google_pay"
+ [[multisafepay.wallet]]
+ payment_method_type = "paypal"
++[[multisafepay.wallet]]
++payment_method_type = "ali_pay"
++[[multisafepay.wallet]]
++payment_method_type = "we_chat_pay"
++[[multisafepay.wallet]]
++payment_method_type = "mb_way"
++[[multisafepay.bank_redirect]]
++payment_method_type = "trustly"
++[[multisafepay.bank_redirect]]
++payment_method_type = "eps"
++[[multisafepay.bank_redirect]]
++payment_method_type = "sofort"
++[[multisafepay.bank_redirect]]
++payment_method_type = "giropay"
++[[multisafepay.bank_redirect]]
++payment_method_type = "ideal"
++[[multisafepay.pay_later]]
++payment_method_type = "klarna"
+ [multisafepay.connector_auth.HeaderKey]
+ api_key = "Enter API Key"
+ [multisafepay.connector_webhook_details]

@@ -1,0 +1,143 @@
+{
+  "row_index": 24,
+  "repo": "juspay/hyperswitch",
+  "pr_number": "10889",
+  "base_sha": "6fd7980e93a3fa1f0911a7475292e86df53d30ab",
+  "head_sha": "f65f838862b2bb6192cb23c71e7189efdb8bd1bf",
+  "model": "litellm/open-large",
+  "status": "ok",
+  "output_dir": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/results_full_40tasks/row_0024_pr_10889",
+  "worktree": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0024_pr_10889",
+  "agent_attempts": 1,
+  "agent_empty_patch_retries": 0,
+  "agent_returncode": 0,
+  "agent_elapsed_seconds": 614.45,
+  "has_patch": true,
+  "num_changed_files": 1,
+  "changed_files": [
+    "crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs"
+  ],
+  "file_f1": 0.667,
+  "file_recall": 0.5,
+  "added_line_f1": 0.16,
+  "removed_line_f1": 0.873,
+  "style_score": 10.0,
+  "compilation_summary": {
+    "passed": 1,
+    "total": 2,
+    "all_passed": false
+  },
+  "review_available": true,
+  "judge_count": 8,
+  "judge_aggregate": {
+    "judge_count": 8,
+    "valid_judges": 8,
+    "raw_scores": {
+      "correctness": [
+        10.0,
+        10.0,
+        10.0,
+        8.0,
+        9.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "completeness": [
+        10.0,
+        10.0,
+        10.0,
+        8.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "convention_adherence": [
+        10.0,
+        10.0,
+        10.0,
+        9.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "hygiene": [
+        10.0,
+        10.0,
+        10.0,
+        9.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "overall": [
+        10.0,
+        10.0,
+        10.0,
+        8.35,
+        9.65,
+        10.0,
+        10.0,
+        10.0
+      ]
+    },
+    "mean": {
+      "correctness": 9.625,
+      "completeness": 9.75,
+      "convention_adherence": 9.875,
+      "hygiene": 9.875,
+      "overall": 9.75
+    },
+    "std_dev": {
+      "correctness": 0.744,
+      "completeness": 0.707,
+      "convention_adherence": 0.354,
+      "hygiene": 0.354,
+      "overall": 0.579
+    },
+    "median": {
+      "correctness": 10.0,
+      "completeness": 10.0,
+      "convention_adherence": 10.0,
+      "hygiene": 10.0,
+      "overall": 10.0
+    },
+    "outliers_excluded": {
+      "correctness": [
+        6,
+        0
+      ],
+      "completeness": [
+        6
+      ],
+      "convention_adherence": [
+        6
+      ],
+      "hygiene": [
+        6
+      ],
+      "overall": [
+        6,
+        0
+      ]
+    },
+    "outlier_explanations": {
+      "correctness": "Excluded 2 outlier(s): judge 6 scored 8.0 (low), judge 0 scored 9.0 (low). Bounds: [9.38, 10.38] computed from IQR with multiplier 1.5.",
+      "completeness": "Excluded 1 outlier(s): judge 6 scored 8.0 (low). Bounds: [10.0, 10.0] computed from IQR with multiplier 1.5.",
+      "convention_adherence": "Excluded 1 outlier(s): judge 6 scored 9.0 (low). Bounds: [10.0, 10.0] computed from IQR with multiplier 1.5.",
+      "hygiene": "Excluded 1 outlier(s): judge 6 scored 9.0 (low). Bounds: [10.0, 10.0] computed from IQR with multiplier 1.5.",
+      "overall": "Excluded 2 outlier(s): judge 6 scored 8.35 (low), judge 0 scored 9.65 (low). Bounds: [9.78, 10.13] computed from IQR with multiplier 1.5."
+    },
+    "final_score": {
+      "correctness": 10.0,
+      "completeness": 10.0,
+      "convention_adherence": 10.0,
+      "hygiene": 10.0,
+      "overall": 10.0
+    }
+  },
+  "elapsed_seconds": 1406.29
+}

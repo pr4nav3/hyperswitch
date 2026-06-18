@@ -1,0 +1,14 @@
+{
+  "row_index": 28,
+  "repo": "juspay/hyperswitch",
+  "pr_number": "11388",
+  "base_sha": "d533e5763dc64506d2f054ff7c45819a7fb1192f",
+  "head_sha": "51186bb81f266532a827c3f2ffba2ce5d754da28",
+  "model": "litellm/open-large",
+  "status": "error",
+  "output_dir": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/results_full_40tasks/row_0028_pr_11388",
+  "worktree": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0028_pr_11388",
+  "error_type": "BenchmarkError",
+  "error": "Command timed out after 2 attempts: opencode run --dir /Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/task_0028_pr_11388 --format json --model litellm/open-large --dangerously-skip-permissions You are being evaluated in a coding-agent benchmark on the `juspay/hyperswitch` Rust monorepo.\n\nYou are in a fresh git checkout at a historical base commit. Your deliverable is the code diff, not prose.\n\nRules:\n- Work only inside the current repository.\n- Do not ask clarification questions. Make the best reasonable assumption and continue.\n- Use the task description as your search index: grep concrete identifiers, constants, route names, file paths, error names, and domain nouns before editing.\n- First understand the relevant existing code; then make the smallest correct patch.\n- Match the surrounding code style exactly. Do not refactor unrelated code.\n- Do not create markdown summaries, backup files, temporary solution files, or notes files.\n- Avoid production-code `.unwrap()`, `.expect()`, `panic!`, `todo!`, `unimplemented!`, `dbg!`, `println!`, `unsafe`, direct indexing, and numeric `as` casts unless the surrounding code and task clearly require it.\n- For Hyperswitch Rust style, prefer existing workspace conventions: grouped imports, `Self` inside `impl` blocks, `error_stack`/`CustomResult` error handling, and shared constants from their canonical crates.\n- Run the most relevant quick checks or tests if feasible. Do not run very long commands.\n- Before stopping, inspect `git diff` and verify each requirement is reflected in the patch.\n- Leave the final changes in the working tree. A commit is optional; the benchmark captures `git diff HEAD`.\n\nTask:\nThe Santander connector has multiple defects in its handling of Brazilian Pix and Boleto payments. Boleto confirmations fail to surface the barcode data returned by the provider, and customer identity documents supplied during payment link creation are lost when rendering the payment method list. Furthermore, CPF and CNPJ validation only checks length instead of verifying checksum algorithms, and payment responses lack the raw QR code payload needed for manual entry alongside the rendered image.\n",
+  "elapsed_seconds": 3606.75
+}

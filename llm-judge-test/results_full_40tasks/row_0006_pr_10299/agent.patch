@@ -1,0 +1,65 @@
+diff --git a/crates/hyperswitch_connectors/src/connectors/boku.rs b/crates/hyperswitch_connectors/src/connectors/boku.rs
+index 75a8c20324..ac4028d131 100644
+--- a/crates/hyperswitch_connectors/src/connectors/boku.rs
++++ b/crates/hyperswitch_connectors/src/connectors/boku.rs
+@@ -776,7 +776,7 @@ static BOKU_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Boku",
+     description: "Boku, Inc. is a mobile payments company that allows businesses to collect online payments through both carrier billing and mobile wallets.",
+     connector_type: enums::HyperswitchConnectorCategory::AlternativePaymentMethod,
+-    integration_status: enums::ConnectorIntegrationStatus::Alpha,
++    integration_status: enums::ConnectorIntegrationStatus::Live,
+ };
+ 
+ static BOKU_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 0] = [];
+diff --git a/crates/hyperswitch_connectors/src/connectors/phonepe.rs b/crates/hyperswitch_connectors/src/connectors/phonepe.rs
+index 5dfdb2ea25..9d00041ac7 100644
+--- a/crates/hyperswitch_connectors/src/connectors/phonepe.rs
++++ b/crates/hyperswitch_connectors/src/connectors/phonepe.rs
+@@ -624,7 +624,7 @@ lazy_static! {
+         description:
+             "PhonePe is a digital payments and financial services platform built on the UPI system. It allows users to make instant payments, recharge mobiles, pay bills, and access financial services like investments and insurance.",
+         connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-        integration_status: enums::ConnectorIntegrationStatus::Alpha,
++        integration_status: enums::ConnectorIntegrationStatus::Live,
+     };
+ 
+     static ref PHONEPE_SUPPORTED_WEBHOOK_FLOWS: Vec<enums::EventClass> = Vec::new();
+diff --git a/crates/hyperswitch_connectors/src/connectors/santander.rs b/crates/hyperswitch_connectors/src/connectors/santander.rs
+index ee2b396417..16f5dd455d 100644
+--- a/crates/hyperswitch_connectors/src/connectors/santander.rs
++++ b/crates/hyperswitch_connectors/src/connectors/santander.rs
+@@ -1079,7 +1079,7 @@ static SANTANDER_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     description:
+         "Santander is a leading private bank in Brazil, offering a wide range of financial services across retail and corporate segments. It is part of the global Santander Group, one of Europe’s largest financial institutions.",
+     connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-    integration_status: enums::ConnectorIntegrationStatus::Alpha,
++    integration_status: enums::ConnectorIntegrationStatus::Live,
+ };
+ 
+ static SANTANDER_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 2] =
+diff --git a/crates/hyperswitch_connectors/src/connectors/square.rs b/crates/hyperswitch_connectors/src/connectors/square.rs
+index 1d65e1578d..085086da30 100644
+--- a/crates/hyperswitch_connectors/src/connectors/square.rs
++++ b/crates/hyperswitch_connectors/src/connectors/square.rs
+@@ -924,7 +924,7 @@ lazy_static! {
+         description:
+             "Square is the largest business technology platform serving all kinds of businesses.",
+         connector_type: enums::HyperswitchConnectorCategory::PaymentGateway,
+-        integration_status: enums::ConnectorIntegrationStatus::Alpha,
++        integration_status: enums::ConnectorIntegrationStatus::Live,
+     };
+     static ref SQUARE_SUPPORTED_PAYMENT_METHODS: SupportedPaymentMethods = {
+         let supported_capture_methods = vec![
+diff --git a/crates/hyperswitch_connectors/src/connectors/stripebilling.rs b/crates/hyperswitch_connectors/src/connectors/stripebilling.rs
+index d2780cb3c0..21cb44c006 100644
+--- a/crates/hyperswitch_connectors/src/connectors/stripebilling.rs
++++ b/crates/hyperswitch_connectors/src/connectors/stripebilling.rs
+@@ -989,7 +989,7 @@ static STRIPEBILLING_CONNECTOR_INFO: ConnectorInfo = ConnectorInfo {
+     display_name: "Stripebilling",
+     description: "Stripe Billing manages subscriptions, recurring payments, and invoicing. It supports trials, usage-based billing, coupons, and automated retries.",
+     connector_type: enums::HyperswitchConnectorCategory::RevenueGrowthManagementPlatform,
+-    integration_status: enums::ConnectorIntegrationStatus::Beta,
++    integration_status: enums::ConnectorIntegrationStatus::Live,
+ };
+ 
+ static STRIPEBILLING_SUPPORTED_WEBHOOK_FLOWS: [enums::EventClass; 1] =

@@ -1,0 +1,39 @@
+diff --git a/crates/external_services/src/email.rs b/crates/external_services/src/email.rs
+index 82a0da7cb9..3913be31b7 100644
+--- a/crates/external_services/src/email.rs
++++ b/crates/external_services/src/email.rs
+@@ -151,7 +151,7 @@ pub struct EmailSettings {
+     pub allowed_unverified_days: i64,
+ 
+     /// Sender email
+-    pub sender_email: String,
++    pub sender_email: pii::Email,
+ 
+     #[serde(flatten)]
+     /// The client specific configurations
+diff --git a/crates/external_services/src/email/ses.rs b/crates/external_services/src/email/ses.rs
+index bc813b7d64..8eaa7b05bd 100644
+--- a/crates/external_services/src/email/ses.rs
++++ b/crates/external_services/src/email/ses.rs
+@@ -96,7 +96,7 @@ impl AwsSes {
+             .ok();
+ 
+         Self {
+-            sender: conf.sender_email.clone(),
++            sender: conf.sender_email.peek().to_owned(),
+             ses_config: ses_config.clone(),
+             settings: conf.clone(),
+         }
+diff --git a/crates/external_services/src/email/smtp.rs b/crates/external_services/src/email/smtp.rs
+index 33ab89f457..a610604a11 100644
+--- a/crates/external_services/src/email/smtp.rs
++++ b/crates/external_services/src/email/smtp.rs
+@@ -66,7 +66,7 @@ impl SmtpServer {
+     /// Constructs a new SMTP client
+     pub async fn create(conf: &EmailSettings, smtp_config: SmtpServerConfig) -> Self {
+         Self {
+-            sender: conf.sender_email.clone(),
++            sender: conf.sender_email.peek().to_owned(),
+             smtp_config: smtp_config.clone(),
+         }
+     }

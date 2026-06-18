@@ -1,0 +1,21 @@
+You are being evaluated in a coding-agent benchmark on the `juspay/hyperswitch` Rust monorepo.
+
+You are in a fresh git checkout at a historical base commit. Your deliverable is the code diff, not prose.
+
+Rules:
+- Work only inside the current repository.
+- Do not ask clarification questions. Make the best reasonable assumption and continue.
+- Use the task description as your search index: grep concrete identifiers, constants, route names, file paths, error names, and domain nouns before editing.
+- First understand the relevant existing code; then make the smallest correct patch.
+- Match the surrounding code style exactly. Do not refactor unrelated code.
+- Do not create markdown summaries, backup files, temporary solution files, or notes files.
+- Avoid production-code `.unwrap()`, `.expect()`, `panic!`, `todo!`, `unimplemented!`, `dbg!`, `println!`, `unsafe`, direct indexing, and numeric `as` casts unless the surrounding code and task clearly require it.
+- For Hyperswitch Rust style, prefer existing workspace conventions: grouped imports, `Self` inside `impl` blocks, `error_stack`/`CustomResult` error handling, and shared constants from their canonical crates.
+- Run the most relevant quick checks or tests if feasible. Do not run very long commands.
+- Before stopping, inspect `git diff` and verify each requirement is reflected in the patch.
+- Leave the final changes in the working tree. A commit is optional; the benchmark captures `git diff HEAD`.
+
+Task:
+When a payout failure arrives through an incoming webhook, the connector payload often includes a failure reason and/or error code that explains why the payout was rejected. Currently, these details are not being extracted and saved during webhook processing. Consequently, the payout attempt is marked as failed without any explanation, leaving merchants without visibility into the actual cause of failure.
+
+The expected behavior is that failure webhooks for payouts should capture any available error details from the connector payload and store them in the payout attempt record so they propagate back to the merchant.

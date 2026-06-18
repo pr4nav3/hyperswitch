@@ -1,0 +1,82 @@
+From 2ed4c97994762e70ac2d273a9f72c3dfe9bfb1a8 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 8 Oct 2025 15:49:32 +0530
+Subject: [PATCH] bug(wasm_changes): Multisafepay wasm changes
+
+---
+ crates/connector_configs/toml/development.toml | 12 ++++++++++++
+ crates/connector_configs/toml/production.toml  | 13 ++++++++++++-
+ crates/connector_configs/toml/sandbox.toml     | 13 ++++++++++++-
+ 3 files changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/crates/connector_configs/toml/development.toml b/crates/connector_configs/toml/development.toml
+index 027c82e3af8..6729c0add3d 100644
+--- a/crates/connector_configs/toml/development.toml
++++ b/crates/connector_configs/toml/development.toml
+@@ -2860,6 +2860,18 @@ api_secret="Merchant Id"
+ api_key="Enter API Key"
+ [multisafepay.connector_webhook_details]
+ merchant_secret="Source verification key"
++[[multisafepay.bank_redirect]]
++payment_method_type = "trustly"
++[[multisafepay.bank_redirect]]
++payment_method_type = "eps"
++[[multisafepay.bank_redirect]]
++payment_method_type = "sofort"
++[[multisafepay.wallet]]
++payment_method_type = "ali_pay"
++[[multisafepay.wallet]]
++payment_method_type = "we_chat_pay"
++[[multisafepay.wallet]]
++payment_method_type = "mb_way"
+ 
+ [[multisafepay.metadata.google_pay]]
+ name="merchant_name"
+diff --git a/crates/connector_configs/toml/production.toml b/crates/connector_configs/toml/production.toml
+index 93d7d1f26e7..170886bc095 100644
+--- a/crates/connector_configs/toml/production.toml
++++ b/crates/connector_configs/toml/production.toml
+@@ -2471,7 +2471,18 @@ payment_method_type = "UnionPay"
+ api_key = "Enter API Key"
+ [multisafepay.connector_webhook_details]
+ merchant_secret = "Source verification key"
+-
++[[multisafepay.bank_redirect]]
++payment_method_type = "trustly"
++[[multisafepay.bank_redirect]]
++payment_method_type = "eps"
++[[multisafepay.bank_redirect]]
++payment_method_type = "sofort"
++[[multisafepay.wallet]]
++payment_method_type = "ali_pay"
++[[multisafepay.wallet]]
++payment_method_type = "we_chat_pay"
++[[multisafepay.wallet]]
++payment_method_type = "mb_way"
+ 
+ [nexinets]
+ [[nexinets.credit]]
+diff --git a/crates/connector_configs/toml/sandbox.toml b/crates/connector_configs/toml/sandbox.toml
+index 77ade3ef742..63b5b3f2d8e 100644
+--- a/crates/connector_configs/toml/sandbox.toml
++++ b/crates/connector_configs/toml/sandbox.toml
+@@ -2906,7 +2906,18 @@ placeholder = "Enter Allowed Auth Methods"
+ required = true
+ type = "MultiSelect"
+ options = ["PAN_ONLY", "CRYPTOGRAM_3DS"]
+-
++[[multisafepay.bank_redirect]]
++payment_method_type = "trustly"
++[[multisafepay.bank_redirect]]
++payment_method_type = "eps"
++[[multisafepay.bank_redirect]]
++payment_method_type = "sofort"
++[[multisafepay.wallet]]
++payment_method_type = "ali_pay"
++[[multisafepay.wallet]]
++payment_method_type = "we_chat_pay"
++[[multisafepay.wallet]]
++payment_method_type = "mb_way"
+ 
+ [nexinets]
+ [[nexinets.credit]]

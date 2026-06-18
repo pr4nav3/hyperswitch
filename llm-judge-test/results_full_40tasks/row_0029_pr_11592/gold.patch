@@ -1,0 +1,846 @@
+From f326e6c8b66d1dc3f91f5409b716598db7d1a21d Mon Sep 17 00:00:00 2001
+From: Shankar Singh C <shankar.singh@juspay.in>
+Date: Tue, 24 Mar 2026 14:42:04 +0530
+Subject: [PATCH 1/8] fix(payment_methods, customers): block legacy routes for
+ modular merchants
+
+---
+ .../router/src/compatibility/stripe/errors.rs |   1 +
+ .../core/errors/customers_error_response.rs   |   3 +
+ crates/router/src/core/errors/transformers.rs |  20 +++
+ crates/router/src/core/utils.rs               |  19 +++
+ crates/router/src/routes/customers.rs         |  75 +++++----
+ crates/router/src/routes/payment_methods.rs   | 144 +++++++++++-------
+ 6 files changed, 177 insertions(+), 85 deletions(-)
+
+diff --git a/crates/router/src/compatibility/stripe/errors.rs b/crates/router/src/compatibility/stripe/errors.rs
+index 734c1cd7d44..6f8904c232c 100644
+--- a/crates/router/src/compatibility/stripe/errors.rs
++++ b/crates/router/src/compatibility/stripe/errors.rs
+@@ -879,6 +879,7 @@ impl ErrorSwitch<StripeErrorCode> for CustomersErrorResponse {
+             Self::MandateActive => SC::MandateActive,
+             Self::CustomerNotFound => SC::CustomerNotFound,
+             Self::CustomerAlreadyExists => SC::DuplicateCustomer,
++            Self::AccessForbidden => SC::Unauthorized,
+         }
+     }
+ }
+diff --git a/crates/router/src/core/errors/customers_error_response.rs b/crates/router/src/core/errors/customers_error_response.rs
+index cde84198b26..105f4bac1f0 100644
+--- a/crates/router/src/core/errors/customers_error_response.rs
++++ b/crates/router/src/core/errors/customers_error_response.rs
+@@ -19,6 +19,9 @@ pub enum CustomersErrorResponse {
+ 
+     #[error("Customer with the given customer id already exists")]
+     CustomerAlreadyExists,
++
++    #[error("Access forbidden")]
++    AccessForbidden,
+ }
+ 
+ impl actix_web::ResponseError for CustomersErrorResponse {
+diff --git a/crates/router/src/core/errors/transformers.rs b/crates/router/src/core/errors/transformers.rs
+index fc4fb26fcb0..81c35e9b668 100644
+--- a/crates/router/src/core/errors/transformers.rs
++++ b/crates/router/src/core/errors/transformers.rs
+@@ -40,6 +40,12 @@ impl ErrorSwitch<api_models::errors::types::ApiErrorResponse> for CustomersError
+                 "Customer with the given `customer_id` already exists",
+                 None,
+             )),
++            Self::AccessForbidden => AER::ForbiddenCommonResource(ApiError::new(
++                "IR",
++                22,
++                "Access forbidden. Not authorized to access this resource",
++                None,
++            )),
+         }
+     }
+ }
+@@ -68,6 +74,20 @@ impl ErrorSwitch<CustomersErrorResponse> for ApiErrorResponse {
+             Self::InternalServerError => CER::InternalServerError,
+             Self::MandateActive => CER::MandateActive,
+             Self::CustomerNotFound => CER::CustomerNotFound,
++            Self::AccessForbidden { .. } => CER::AccessForbidden,
++            _ => CER::InternalServerError,
++        }
++    }
++}
++
++impl From<ApiErrorResponse> for CustomersErrorResponse {
++    fn from(error: ApiErrorResponse) -> Self {
++        use CustomersErrorResponse as CER;
++        match error {
++            ApiErrorResponse::InternalServerError => CER::InternalServerError,
++            ApiErrorResponse::MandateActive => CER::MandateActive,
++            ApiErrorResponse::CustomerNotFound => CER::CustomerNotFound,
++            ApiErrorResponse::AccessForbidden { .. } => CER::AccessForbidden,
+             _ => CER::InternalServerError,
+         }
+     }
+diff --git a/crates/router/src/core/utils.rs b/crates/router/src/core/utils.rs
+index 47f89119d24..ba226549ec1 100644
+--- a/crates/router/src/core/utils.rs
++++ b/crates/router/src/core/utils.rs
+@@ -81,6 +81,25 @@ pub async fn get_feature_config(
+     }
+ }
+ 
++#[cfg(feature = "v1")]
++pub async fn validate_legacy_endpoint_access<E>(
++    state: &SessionState,
++    platform: &domain::Platform,
++) -> error_stack::Result<(), E>
++where
++    E: From<errors::ApiErrorResponse> + error_stack::Context,
++{
++    let feature_config = get_feature_config(state, platform).await;
++    if feature_config.is_payment_method_modular_allowed {
++        let api_error = errors::ApiErrorResponse::AccessForbidden {
++            resource: "Deprecated route".to_string(),
++        };
++        Err(error_stack::report!(E::from(api_error)))
++    } else {
++        Ok(())
++    }
++}
++
+ pub const IRRELEVANT_CONNECTOR_REQUEST_REFERENCE_ID_IN_DISPUTE_FLOW: &str =
+     "irrelevant_connector_request_reference_id_in_dispute_flow";
+ const IRRELEVANT_ATTEMPT_ID_IN_DISPUTE_FLOW: &str = "irrelevant_attempt_id_in_dispute_flow";
+diff --git a/crates/router/src/routes/customers.rs b/crates/router/src/routes/customers.rs
+index c58ad7d8123..285245a3a93 100644
+--- a/crates/router/src/routes/customers.rs
++++ b/crates/router/src/routes/customers.rs
+@@ -1,13 +1,19 @@
+ use actix_web::{web, HttpRequest, HttpResponse, Responder};
+ use common_utils::id_type;
++
+ use router_env::{instrument, tracing, Flow};
+ 
+ use super::app::AppState;
+ use crate::{
+-    core::{api_locking, customers::*},
++    core::{
++        api_locking,
++        customers::*,
++        utils::validate_legacy_endpoint_access,
++    },
+     services::{api, authentication as auth, authorization::permissions::Permission},
+     types::api::customers,
+ };
++
+ #[cfg(feature = "v2")]
+ #[instrument(skip_all, fields(flow = ?Flow::CustomersCreate))]
+ pub async fn customers_create(
+@@ -46,6 +52,7 @@ pub async fn customers_create(
+     ))
+     .await
+ }
++
+ #[cfg(feature = "v1")]
+ #[instrument(skip_all, fields(flow = ?Flow::CustomersCreate))]
+ pub async fn customers_create(
+@@ -60,13 +67,17 @@ pub async fn customers_create(
+         &req,
+         json_payload.into_inner(),
+         |state, auth: auth::AuthenticationData, req, _| {
+-            create_customer(
+-                state,
+-                auth.platform.get_provider().clone(),
+-                auth.platform.get_initiator().cloned(),
+-                req,
+-                None,
+-            )
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                create_customer(
++                    state,
++                    auth.platform.get_provider().clone(),
++                    auth.platform.get_initiator().cloned(),
++                    req,
++                    None,
++                )
++                .await
++            })
+         },
+         auth::auth_type(
+             &auth::HeaderAuth(auth::ApiKeyAuth {
+@@ -118,14 +129,18 @@ pub async fn customers_retrieve(
+         state,
+         &req,
+         customer_id,
+-        |state, auth, customer_id, _| {
+-            let profile_id = auth.profile.map(|profile| profile.get_id().clone());
+-            retrieve_customer(
+-                state,
+-                auth.platform.get_provider().clone(),
+-                profile_id,
+-                customer_id,
+-            )
++        move |state, auth: auth::AuthenticationData, customer_id, _| {
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                let profile_id = auth.profile.map(|profile| profile.get_id().clone());
++                retrieve_customer(
++                    state,
++                    auth.platform.get_provider().clone(),
++                    profile_id,
++                    customer_id,
++                )
++                .await
++            })
+         },
+         &*auth,
+         api_locking::LockAction::NotApplicable,
+@@ -185,6 +200,7 @@ pub async fn customers_retrieve(
+     ))
+     .await
+ }
++
+ #[cfg(feature = "v2")]
+ #[instrument(skip_all, fields(flow = ?Flow::CustomersList))]
+ pub async fn customers_list(
+@@ -219,6 +235,7 @@ pub async fn customers_list(
+     ))
+     .await
+ }
++
+ #[cfg(feature = "v1")]
+ #[instrument(skip_all, fields(flow = ?Flow::CustomersList))]
+ pub async fn customers_list(
+@@ -345,12 +362,16 @@ pub async fn customers_update(
+         &req,
+         request_internal,
+         |state, auth: auth::AuthenticationData, request_internal, _| {
+-            update_customer(
+-                state,
+-                auth.platform.get_provider().clone(),
+-                auth.platform.get_initiator().cloned(),
+-                request_internal,
+-            )
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                update_customer(
++                    state,
++                    auth.platform.get_provider().clone(),
++                    auth.platform.get_initiator().cloned(),
++                    request_internal,
++                )
++                .await
++            })
+         },
+         auth::auth_type(
+             &auth::ApiKeyAuth {
+@@ -463,12 +484,10 @@ pub async fn customers_delete(
+         &req,
+         customer_id,
+         |state, auth: auth::AuthenticationData, customer_id, _| {
+-            delete_customer(
+-                state,
+-                auth.platform.get_provider().clone(),
+-                auth.platform.get_initiator().cloned(),
+-                customer_id,
+-            )
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                crate::core::mandate::get_customer_mandates(state, auth.platform, customer_id).await
++            })
+         },
+         auth::auth_type(
+             &auth::HeaderAuth(auth::ApiKeyAuth {
+diff --git a/crates/router/src/routes/payment_methods.rs b/crates/router/src/routes/payment_methods.rs
+index f4a5db63da9..570716dd764 100644
+--- a/crates/router/src/routes/payment_methods.rs
++++ b/crates/router/src/routes/payment_methods.rs
+@@ -18,6 +18,8 @@ use hyperswitch_domain_models::{
+ use router_env::{instrument, logger, tracing, Flow};
+ 
+ use super::app::{AppState, SessionState};
++#[cfg(feature = "v1")]
++use crate::core::utils::validate_legacy_endpoint_access;
+ #[cfg(all(feature = "v1", any(feature = "olap", feature = "oltp")))]
+ use crate::core::{
+     customers,
+@@ -51,14 +53,17 @@ pub async fn create_payment_method_api(
+         state,
+         &req,
+         json_payload.into_inner(),
+-        |state, auth: auth::AuthenticationData, req, _| async move {
+-            Box::pin(cards::get_client_secret_or_add_payment_method(
+-                &state,
+-                req,
+-                auth.platform.get_provider(),
+-                auth.platform.get_initiator(),
+-            ))
+-            .await
++        |state, auth: auth::AuthenticationData, req, _| {
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                cards::get_client_secret_or_add_payment_method(
++                    &state,
++                    req,
++                    auth.platform.get_provider(),
++                    auth.platform.get_initiator(),
++                )
++                .await
++            })
+         },
+         &auth::HeaderAuth(auth::ApiKeyAuth {
+             allow_connected_scope_operation: true,
+@@ -630,18 +635,23 @@ pub async fn save_payment_method_api(
+         state,
+         &req,
+         payload,
+-        |state, auth: auth::AuthenticationData, mut req, _| {
+-            if let Some(client_secret) = auth.client_secret {
+-                req.client_secret = Some(client_secret);
+-            }
++        move |state, auth: auth::AuthenticationData, mut req, _| {
++            let pm_id = pm_id.clone();
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                if let Some(client_secret) = auth.client_secret {
++                    req.client_secret = Some(client_secret);
++                }
+ 
+-            Box::pin(cards::add_payment_method_data(
+-                state,
+-                req,
+-                auth.platform.get_provider().clone(),
+-                auth.platform.get_initiator().cloned(),
+-                pm_id.clone(),
+-            ))
++                cards::add_payment_method_data(
++                    state,
++                    req,
++                    auth.platform.get_provider().clone(),
++                    auth.platform.get_initiator().cloned(),
++                    pm_id,
++                )
++                .await
++            })
+         },
+         &*auth,
+         api_locking::LockAction::NotApplicable,
+@@ -674,12 +684,15 @@ pub async fn list_payment_method_api(
+         &req,
+         payload,
+         |state, auth: auth::AuthenticationData, mut req, _| {
+-            if let Some(client_secret) = auth.client_secret {
+-                req.client_secret = Some(client_secret);
+-            }
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                if let Some(client_secret) = auth.client_secret {
++                    req.client_secret = Some(client_secret);
++                }
+ 
+-            // TODO (#7195): Fill platform_merchant_account in the client secret auth and pass it here.
+-            cards::list_payment_methods(state, auth.platform, req)
++                // TODO (#7195): Fill platform_merchant_account in the client secret auth and pass it here.
++                cards::list_payment_methods(state, auth.platform, req).await
++            })
+         },
+         &*auth,
+         api_locking::LockAction::NotApplicable,
+@@ -722,18 +735,23 @@ pub async fn list_customer_payment_method_api(
+         state,
+         &req,
+         payload,
+-        |state, auth: auth::AuthenticationData, mut req, _| {
+-            if let Some(client_secret) = auth.client_secret {
+-                req.client_secret = Some(client_secret);
+-            }
++        move |state, auth: auth::AuthenticationData, mut req, _| {
++            let customer_id = customer_id.clone();
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                if let Some(client_secret) = auth.client_secret {
++                    req.client_secret = Some(client_secret);
++                }
+ 
+-            cards::do_list_customer_pm_fetch_customer_if_not_passed(
+-                state,
+-                auth.platform,
+-                Some(req),
+-                Some(&customer_id),
+-                None,
+-            )
++                cards::do_list_customer_pm_fetch_customer_if_not_passed(
++                    state,
++                    auth.platform,
++                    Some(req),
++                    Some(&customer_id),
++                    None,
++                )
++                .await
++            })
+         },
+         &*auth_type,
+         api_locking::LockAction::NotApplicable,
+@@ -790,17 +808,21 @@ pub async fn list_customer_payment_method_api_client(
+         &req,
+         payload,
+         |state, auth: auth::AuthenticationData, mut req, _| {
+-            if let Some(client_secret) = auth.client_secret {
+-                req.client_secret = Some(client_secret);
+-            }
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                if let Some(client_secret) = auth.client_secret {
++                    req.client_secret = Some(client_secret);
++                }
+ 
+-            cards::do_list_customer_pm_fetch_customer_if_not_passed(
+-                state,
+-                auth.platform,
+-                Some(req),
+-                None,
+-                is_ephemeral_auth.then_some(api_key).flatten(),
+-            )
++                cards::do_list_customer_pm_fetch_customer_if_not_passed(
++                    state,
++                    auth.platform,
++                    Some(req),
++                    None,
++                    is_ephemeral_auth.then_some(api_key).flatten(),
++                )
++                .await
++            })
+         },
+         &*auth,
+         api_locking::LockAction::NotApplicable,
+@@ -1014,6 +1036,7 @@ pub async fn payment_method_retrieve_api(
+         &req,
+         payload,
+         |state, auth: auth::AuthenticationData, pm, _| async move {
++            validate_legacy_endpoint_access(&state, &auth.platform).await?;
+             cards::PmCards {
+                 state: &state,
+                 provider: auth.platform.get_provider(),
+@@ -1056,19 +1079,24 @@ pub async fn payment_method_update_api(
+         state,
+         &req,
+         payload,
+-        |state, auth: auth::AuthenticationData, mut req, _| {
+-            if let Some(client_secret) = auth.client_secret {
+-                req.client_secret = Some(client_secret);
+-            }
++        move |state, auth: auth::AuthenticationData, mut req, _| {
++            let payment_method_id = payment_method_id.clone();
++            Box::pin(async move {
++                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                if let Some(client_secret) = auth.client_secret {
++                    req.client_secret = Some(client_secret);
++                }
+ 
+-            cards::update_customer_payment_method(
+-                state,
+-                auth.platform.get_provider().clone(),
+-                auth.platform.get_initiator().cloned(),
+-                req,
+-                &payment_method_id,
+-                None,
+-            )
++                cards::update_customer_payment_method(
++                    state,
++                    auth.platform.get_provider().clone(),
++                    auth.platform.get_initiator().cloned(),
++                    req,
++                    &payment_method_id,
++                    None,
++                )
++                .await
++            })
+         },
+         &*auth,
+         api_locking::LockAction::NotApplicable,
+@@ -1103,6 +1131,7 @@ pub async fn payment_method_delete_api(
+         &req,
+         pm,
+         |state, auth: auth::AuthenticationData, req, _| async move {
++            validate_legacy_endpoint_access(&state, &auth.platform).await?;
+             cards::PmCards {
+                 state: &state,
+                 provider: auth.platform.get_provider(),
+@@ -1239,6 +1268,7 @@ pub async fn default_payment_method_set_api(
+         &req,
+         payload,
+         |state, auth: auth::AuthenticationData, default_payment_method, _| async move {
++            validate_legacy_endpoint_access(&state, &auth.platform).await?;
+             cards::PmCards {
+                 state: &state,
+                 provider: auth.platform.get_provider(),
+
+From b44b80da2ad89dc2319245746c40c86e890fd117 Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Tue, 24 Mar 2026 09:16:11 +0000
+Subject: [PATCH 2/8] chore: run formatter
+
+---
+ crates/router/src/routes/customers.rs | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/crates/router/src/routes/customers.rs b/crates/router/src/routes/customers.rs
+index 285245a3a93..fb9e925a3af 100644
+--- a/crates/router/src/routes/customers.rs
++++ b/crates/router/src/routes/customers.rs
+@@ -1,15 +1,10 @@
+ use actix_web::{web, HttpRequest, HttpResponse, Responder};
+ use common_utils::id_type;
+-
+ use router_env::{instrument, tracing, Flow};
+ 
+ use super::app::AppState;
+ use crate::{
+-    core::{
+-        api_locking,
+-        customers::*,
+-        utils::validate_legacy_endpoint_access,
+-    },
++    core::{api_locking, customers::*, utils::validate_legacy_endpoint_access},
+     services::{api, authentication as auth, authorization::permissions::Permission},
+     types::api::customers,
+ };
+
+From 1293b497b80aed9ea70d339b499a19cbd41fb4ef Mon Sep 17 00:00:00 2001
+From: Shankar Singh C <shankar.singh@juspay.in>
+Date: Wed, 25 Mar 2026 09:23:53 +0530
+Subject: [PATCH 3/8] error formatting
+
+---
+ crates/router/src/compatibility/stripe/errors.rs  |  2 +-
+ .../src/core/errors/customers_error_response.rs   |  2 +-
+ crates/router/src/core/errors/transformers.rs     | 15 +++++++++++----
+ crates/router/src/routes/customers.rs             | 12 +++++++-----
+ 4 files changed, 20 insertions(+), 11 deletions(-)
+
+diff --git a/crates/router/src/compatibility/stripe/errors.rs b/crates/router/src/compatibility/stripe/errors.rs
+index 6f8904c232c..4fba4476562 100644
+--- a/crates/router/src/compatibility/stripe/errors.rs
++++ b/crates/router/src/compatibility/stripe/errors.rs
+@@ -879,7 +879,7 @@ impl ErrorSwitch<StripeErrorCode> for CustomersErrorResponse {
+             Self::MandateActive => SC::MandateActive,
+             Self::CustomerNotFound => SC::CustomerNotFound,
+             Self::CustomerAlreadyExists => SC::DuplicateCustomer,
+-            Self::AccessForbidden => SC::Unauthorized,
++            Self::AccessForbidden { .. } => SC::Unauthorized,
+         }
+     }
+ }
+diff --git a/crates/router/src/core/errors/customers_error_response.rs b/crates/router/src/core/errors/customers_error_response.rs
+index 105f4bac1f0..41f43a4eb18 100644
+--- a/crates/router/src/core/errors/customers_error_response.rs
++++ b/crates/router/src/core/errors/customers_error_response.rs
+@@ -21,7 +21,7 @@ pub enum CustomersErrorResponse {
+     CustomerAlreadyExists,
+ 
+     #[error("Access forbidden")]
+-    AccessForbidden,
++    AccessForbidden { message: String },
+ }
+ 
+ impl actix_web::ResponseError for CustomersErrorResponse {
+diff --git a/crates/router/src/core/errors/transformers.rs b/crates/router/src/core/errors/transformers.rs
+index 81c35e9b668..c0bb1560aa1 100644
+--- a/crates/router/src/core/errors/transformers.rs
++++ b/crates/router/src/core/errors/transformers.rs
+@@ -40,10 +40,13 @@ impl ErrorSwitch<api_models::errors::types::ApiErrorResponse> for CustomersError
+                 "Customer with the given `customer_id` already exists",
+                 None,
+             )),
+-            Self::AccessForbidden => AER::ForbiddenCommonResource(ApiError::new(
++            Self::AccessForbidden { message } => AER::ForbiddenCommonResource(ApiError::new(
+                 "IR",
+                 22,
+-                "Access forbidden. Not authorized to access this resource",
++                format!(
++                    "Access forbidden. Not authorized to access this resource {}",
++                    message
++                ),
+                 None,
+             )),
+         }
+@@ -74,7 +77,9 @@ impl ErrorSwitch<CustomersErrorResponse> for ApiErrorResponse {
+             Self::InternalServerError => CER::InternalServerError,
+             Self::MandateActive => CER::MandateActive,
+             Self::CustomerNotFound => CER::CustomerNotFound,
+-            Self::AccessForbidden { .. } => CER::AccessForbidden,
++            Self::AccessForbidden { resource } => CER::AccessForbidden {
++                message: resource.clone(),
++            },
+             _ => CER::InternalServerError,
+         }
+     }
+@@ -87,7 +92,9 @@ impl From<ApiErrorResponse> for CustomersErrorResponse {
+             ApiErrorResponse::InternalServerError => CER::InternalServerError,
+             ApiErrorResponse::MandateActive => CER::MandateActive,
+             ApiErrorResponse::CustomerNotFound => CER::CustomerNotFound,
+-            ApiErrorResponse::AccessForbidden { .. } => CER::AccessForbidden,
++            ApiErrorResponse::AccessForbidden { resource } => CER::AccessForbidden {
++                message: resource.clone(),
++            },
+             _ => CER::InternalServerError,
+         }
+     }
+diff --git a/crates/router/src/routes/customers.rs b/crates/router/src/routes/customers.rs
+index 285245a3a93..26b81d7718b 100644
+--- a/crates/router/src/routes/customers.rs
++++ b/crates/router/src/routes/customers.rs
+@@ -8,12 +8,14 @@ use crate::{
+     core::{
+         api_locking,
+         customers::*,
+-        utils::validate_legacy_endpoint_access,
+     },
+     services::{api, authentication as auth, authorization::permissions::Permission},
+     types::api::customers,
+ };
+ 
++#[cfg(feature = "v1")]
++use crate::core::utils as core_utils;
++
+ #[cfg(feature = "v2")]
+ #[instrument(skip_all, fields(flow = ?Flow::CustomersCreate))]
+ pub async fn customers_create(
+@@ -68,7 +70,7 @@ pub async fn customers_create(
+         json_payload.into_inner(),
+         |state, auth: auth::AuthenticationData, req, _| {
+             Box::pin(async move {
+-                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                core_utils::validate_legacy_endpoint_access(&state, &auth.platform).await?;
+                 create_customer(
+                     state,
+                     auth.platform.get_provider().clone(),
+@@ -131,7 +133,7 @@ pub async fn customers_retrieve(
+         customer_id,
+         move |state, auth: auth::AuthenticationData, customer_id, _| {
+             Box::pin(async move {
+-                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                core_utils::validate_legacy_endpoint_access(&state, &auth.platform).await?;
+                 let profile_id = auth.profile.map(|profile| profile.get_id().clone());
+                 retrieve_customer(
+                     state,
+@@ -363,7 +365,7 @@ pub async fn customers_update(
+         request_internal,
+         |state, auth: auth::AuthenticationData, request_internal, _| {
+             Box::pin(async move {
+-                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                core_utils::validate_legacy_endpoint_access(&state, &auth.platform).await?;
+                 update_customer(
+                     state,
+                     auth.platform.get_provider().clone(),
+@@ -485,7 +487,7 @@ pub async fn customers_delete(
+         customer_id,
+         |state, auth: auth::AuthenticationData, customer_id, _| {
+             Box::pin(async move {
+-                validate_legacy_endpoint_access(&state, &auth.platform).await?;
++                core_utils::validate_legacy_endpoint_access(&state, &auth.platform).await?;
+                 crate::core::mandate::get_customer_mandates(state, auth.platform, customer_id).await
+             })
+         },
+
+From c73eed1de28e110769888ece251bec80784c88a2 Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Wed, 25 Mar 2026 03:57:06 +0000
+Subject: [PATCH 4/8] chore: run formatter
+
+---
+ crates/router/src/routes/customers.rs | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/crates/router/src/routes/customers.rs b/crates/router/src/routes/customers.rs
+index 7e106a99310..faa461dd559 100644
+--- a/crates/router/src/routes/customers.rs
++++ b/crates/router/src/routes/customers.rs
+@@ -3,18 +3,14 @@ use common_utils::id_type;
+ use router_env::{instrument, tracing, Flow};
+ 
+ use super::app::AppState;
++#[cfg(feature = "v1")]
++use crate::core::utils as core_utils;
+ use crate::{
+-    core::{
+-        api_locking,
+-        customers::*,
+-    },
++    core::{api_locking, customers::*},
+     services::{api, authentication as auth, authorization::permissions::Permission},
+     types::api::customers,
+ };
+ 
+-#[cfg(feature = "v1")]
+-use crate::core::utils as core_utils;
+-
+ #[cfg(feature = "v2")]
+ #[instrument(skip_all, fields(flow = ?Flow::CustomersCreate))]
+ pub async fn customers_create(
+
+From dc9bd1c07a0bd743582b95a0d0c6cf7730bab044 Mon Sep 17 00:00:00 2001
+From: Shankar Singh C <shankar.singh@juspay.in>
+Date: Wed, 25 Mar 2026 12:06:16 +0530
+Subject: [PATCH 5/8] fix clippy
+
+---
+ crates/router/src/core/errors/transformers.rs | 11 +++++------
+ crates/router/src/routes/payment_methods.rs   |  6 +++---
+ 2 files changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/crates/router/src/core/errors/transformers.rs b/crates/router/src/core/errors/transformers.rs
+index c0bb1560aa1..1e8f1ed306c 100644
+--- a/crates/router/src/core/errors/transformers.rs
++++ b/crates/router/src/core/errors/transformers.rs
+@@ -87,15 +87,14 @@ impl ErrorSwitch<CustomersErrorResponse> for ApiErrorResponse {
+ 
+ impl From<ApiErrorResponse> for CustomersErrorResponse {
+     fn from(error: ApiErrorResponse) -> Self {
+-        use CustomersErrorResponse as CER;
+         match error {
+-            ApiErrorResponse::InternalServerError => CER::InternalServerError,
+-            ApiErrorResponse::MandateActive => CER::MandateActive,
+-            ApiErrorResponse::CustomerNotFound => CER::CustomerNotFound,
+-            ApiErrorResponse::AccessForbidden { resource } => CER::AccessForbidden {
++            ApiErrorResponse::InternalServerError => Self::InternalServerError,
++            ApiErrorResponse::MandateActive => Self::MandateActive,
++            ApiErrorResponse::CustomerNotFound => Self::CustomerNotFound,
++            ApiErrorResponse::AccessForbidden { resource } => Self::AccessForbidden {
+                 message: resource.clone(),
+             },
+-            _ => CER::InternalServerError,
++            _ => Self::InternalServerError,
+         }
+     }
+ }
+diff --git a/crates/router/src/routes/payment_methods.rs b/crates/router/src/routes/payment_methods.rs
+index 570716dd764..f9bfe32e7f6 100644
+--- a/crates/router/src/routes/payment_methods.rs
++++ b/crates/router/src/routes/payment_methods.rs
+@@ -691,7 +691,7 @@ pub async fn list_payment_method_api(
+                 }
+ 
+                 // TODO (#7195): Fill platform_merchant_account in the client secret auth and pass it here.
+-                cards::list_payment_methods(state, auth.platform, req).await
++                Box::pin(cards::list_payment_methods(state, auth.platform, req)).await
+             })
+         },
+         &*auth,
+@@ -1087,14 +1087,14 @@ pub async fn payment_method_update_api(
+                     req.client_secret = Some(client_secret);
+                 }
+ 
+-                cards::update_customer_payment_method(
++                Box::pin(cards::update_customer_payment_method(
+                     state,
+                     auth.platform.get_provider().clone(),
+                     auth.platform.get_initiator().cloned(),
+                     req,
+                     &payment_method_id,
+                     None,
+-                )
++                ))
+                 .await
+             })
+         },
+
+From b680e1aa6700427c5721216cc5019222d801808a Mon Sep 17 00:00:00 2001
+From: Shankar Singh C <shankar.singh@juspay.in>
+Date: Wed, 25 Mar 2026 16:12:35 +0530
+Subject: [PATCH 6/8] fix cypress
+
+---
+ crates/router/src/routes/customers.rs | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/crates/router/src/routes/customers.rs b/crates/router/src/routes/customers.rs
+index faa461dd559..4b815da86fd 100644
+--- a/crates/router/src/routes/customers.rs
++++ b/crates/router/src/routes/customers.rs
+@@ -483,7 +483,13 @@ pub async fn customers_delete(
+         |state, auth: auth::AuthenticationData, customer_id, _| {
+             Box::pin(async move {
+                 core_utils::validate_legacy_endpoint_access(&state, &auth.platform).await?;
+-                crate::core::mandate::get_customer_mandates(state, auth.platform, customer_id).await
++                delete_customer(
++                    state,
++                    auth.platform.get_provider().clone(),
++                    auth.platform.get_initiator().cloned(),
++                    customer_id,
++                )
++                .await
+             })
+         },
+         auth::auth_type(
+
+From e8259954e47065d30a2ff5f7b640ab48d81313ae Mon Sep 17 00:00:00 2001
+From: Shankar Singh C <shankar.singh@juspay.in>
+Date: Thu, 26 Mar 2026 15:39:51 +0530
+Subject: [PATCH 7/8] remove legacy route validation for merchant pml
+
+---
+ crates/router/src/routes/payment_methods.rs | 13 +++++--------
+ 1 file changed, 5 insertions(+), 8 deletions(-)
+
+diff --git a/crates/router/src/routes/payment_methods.rs b/crates/router/src/routes/payment_methods.rs
+index f9bfe32e7f6..7fd9a3fcc50 100644
+--- a/crates/router/src/routes/payment_methods.rs
++++ b/crates/router/src/routes/payment_methods.rs
+@@ -684,15 +684,12 @@ pub async fn list_payment_method_api(
+         &req,
+         payload,
+         |state, auth: auth::AuthenticationData, mut req, _| {
+-            Box::pin(async move {
+-                validate_legacy_endpoint_access(&state, &auth.platform).await?;
+-                if let Some(client_secret) = auth.client_secret {
+-                    req.client_secret = Some(client_secret);
+-                }
++            if let Some(client_secret) = auth.client_secret {
++                req.client_secret = Some(client_secret);
++            }
+ 
+-                // TODO (#7195): Fill platform_merchant_account in the client secret auth and pass it here.
+-                Box::pin(cards::list_payment_methods(state, auth.platform, req)).await
+-            })
++            // TODO (#7195): Fill platform_merchant_account in the client secret auth and pass it here.
++            cards::list_payment_methods(state, auth.platform, req)
+         },
+         &*auth,
+         api_locking::LockAction::NotApplicable,
+
+From 4e1c439b9cbf832cd82434b590fa7be76da66351 Mon Sep 17 00:00:00 2001
+From: Shankar Singh C <shankar.singh@juspay.in>
+Date: Thu, 26 Mar 2026 16:05:38 +0530
+Subject: [PATCH 8/8] address pr comment
+
+---
+ crates/router/src/core/utils.rs | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/crates/router/src/core/utils.rs b/crates/router/src/core/utils.rs
+index ba226549ec1..97c023793e3 100644
+--- a/crates/router/src/core/utils.rs
++++ b/crates/router/src/core/utils.rs
+@@ -90,14 +90,14 @@ where
+     E: From<errors::ApiErrorResponse> + error_stack::Context,
+ {
+     let feature_config = get_feature_config(state, platform).await;
+-    if feature_config.is_payment_method_modular_allowed {
+-        let api_error = errors::ApiErrorResponse::AccessForbidden {
+-            resource: "Deprecated route".to_string(),
+-        };
+-        Err(error_stack::report!(E::from(api_error)))
+-    } else {
+-        Ok(())
+-    }
++    common_utils::fp_utils::when(feature_config.is_payment_method_modular_allowed, || {
++        Err(error_stack::report!(E::from(
++            errors::ApiErrorResponse::AccessForbidden {
++                resource: "Deprecated route".to_string(),
++            },
++        )))
++    })?;
++    Ok(())
+ }
+ 
+ pub const IRRELEVANT_CONNECTOR_REQUEST_REFERENCE_ID_IN_DISPUTE_FLOW: &str =

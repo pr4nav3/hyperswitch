@@ -1,0 +1,450 @@
+From a39a19c29cdb073c5816c53dfe5d6286a9d4eaa0 Mon Sep 17 00:00:00 2001
+From: Amitsingh Tanwar <amitsingh.tanwar@juspay.in>
+Date: Thu, 27 Nov 2025 19:36:51 +0530
+Subject: [PATCH 1/3] fix: added connector name from router data isntead of MCA
+ type
+
+---
+ .../src/core/payments/flows/authorize_flow.rs | 33 ++++++----
+ .../src/core/payments/flows/cancel_flow.rs    | 11 ++--
+ .../src/core/payments/flows/capture_flow.rs   | 11 ++--
+ .../payments/flows/complete_authorize_flow.rs |  3 +
+ .../payments/flows/external_proxy_flow.rs     |  1 +
+ .../src/core/payments/flows/psync_flow.rs     |  1 +
+ .../core/payments/flows/setup_mandate_flow.rs | 11 ++--
+ .../payments/gateway/access_token_gateway.rs  |  1 +
+ .../payments/gateway/authorize_gateway.rs     |  1 +
+ .../gateway/create_customer_gateway.rs        |  1 +
+ .../payments/gateway/create_order_gateway.rs  |  1 +
+ .../payment_method_token_create_gateway.rs    |  1 +
+ .../core/payments/gateway/psync_gateway.rs    |  1 +
+ .../payments/gateway/session_token_gateway.rs |  1 +
+ .../src/core/unified_connector_service.rs     | 65 +++++++++++--------
+ 15 files changed, 92 insertions(+), 51 deletions(-)
+
+diff --git a/crates/router/src/core/payments/flows/authorize_flow.rs b/crates/router/src/core/payments/flows/authorize_flow.rs
+index 712a7b7456e..31f077d0f8f 100644
+--- a/crates/router/src/core/payments/flows/authorize_flow.rs
++++ b/crates/router/src/core/payments/flows/authorize_flow.rs
+@@ -951,10 +951,13 @@ async fn call_unified_connector_service_authorize(
+ 
+     let merchant_connector_id = merchant_connector_account.get_mca_id();
+ 
+-    let connector_auth_metadata =
+-        build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-            .change_context(ApiErrorResponse::InternalServerError)
+-            .attach_printable("Failed to construct request metadata")?;
++    let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++        merchant_connector_account,
++        platform,
++        router_data.connector.clone(),
++    )
++    .change_context(ApiErrorResponse::InternalServerError)
++    .attach_printable("Failed to construct request metadata")?;
+ 
+     let merchant_reference_id = header_payload
+         .x_reference_id
+@@ -1165,10 +1168,13 @@ async fn call_unified_connector_service_pre_authenticate(
+             .change_context(ApiErrorResponse::InternalServerError)
+             .attach_printable("Failed to construct Payment Authorize Request")?;
+ 
+-    let connector_auth_metadata =
+-        build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-            .change_context(ApiErrorResponse::InternalServerError)
+-            .attach_printable("Failed to construct request metadata")?;
++    let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++        merchant_connector_account,
++        platform,
++        router_data.connector.clone(),
++    )
++    .change_context(ApiErrorResponse::InternalServerError)
++    .attach_printable("Failed to construct request metadata")?;
+     let merchant_reference_id = header_payload
+         .x_reference_id
+         .clone()
+@@ -1265,10 +1271,13 @@ async fn call_unified_connector_service_repeat_payment(
+ 
+     let merchant_connector_id = merchant_connector_account.get_mca_id();
+ 
+-    let connector_auth_metadata =
+-        build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-            .change_context(ApiErrorResponse::InternalServerError)
+-            .attach_printable("Failed to construct request metadata")?;
++    let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++        merchant_connector_account,
++        platform,
++        router_data.connector.clone(),
++    )
++    .change_context(ApiErrorResponse::InternalServerError)
++    .attach_printable("Failed to construct request metadata")?;
+     let merchant_reference_id = header_payload
+         .x_reference_id
+         .clone()
+diff --git a/crates/router/src/core/payments/flows/cancel_flow.rs b/crates/router/src/core/payments/flows/cancel_flow.rs
+index 068cc530e05..1481d63d2b5 100644
+--- a/crates/router/src/core/payments/flows/cancel_flow.rs
++++ b/crates/router/src/core/payments/flows/cancel_flow.rs
+@@ -193,10 +193,13 @@ impl Feature<api::Void, types::PaymentsCancelData>
+                 .change_context(ApiErrorResponse::InternalServerError)
+                 .attach_printable("Failed to construct Payment Void Request")?;
+ 
+-        let connector_auth_metadata =
+-            build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-                .change_context(ApiErrorResponse::InternalServerError)
+-                .attach_printable("Failed to construct request metadata")?;
++        let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++            merchant_connector_account,
++            platform,
++            self.connector.clone(),
++        )
++        .change_context(ApiErrorResponse::InternalServerError)
++        .attach_printable("Failed to construct request metadata")?;
+ 
+         let merchant_reference_id = header_payload
+             .x_reference_id
+diff --git a/crates/router/src/core/payments/flows/capture_flow.rs b/crates/router/src/core/payments/flows/capture_flow.rs
+index 9ae3780ebce..b527728a2b7 100644
+--- a/crates/router/src/core/payments/flows/capture_flow.rs
++++ b/crates/router/src/core/payments/flows/capture_flow.rs
+@@ -202,10 +202,13 @@ impl Feature<api::Capture, types::PaymentsCaptureData>
+                 .change_context(ApiErrorResponse::InternalServerError)
+                 .attach_printable("Failed to construct Payment Capture Request")?;
+ 
+-        let connector_auth_metadata =
+-            build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-                .change_context(ApiErrorResponse::InternalServerError)
+-                .attach_printable("Failed to construct request metadata")?;
++        let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++            merchant_connector_account,
++            platform,
++            self.connector.clone(),
++        )
++        .change_context(ApiErrorResponse::InternalServerError)
++        .attach_printable("Failed to construct request metadata")?;
+         let merchant_reference_id = header_payload
+             .x_reference_id
+             .clone()
+diff --git a/crates/router/src/core/payments/flows/complete_authorize_flow.rs b/crates/router/src/core/payments/flows/complete_authorize_flow.rs
+index 9c8546d5393..85845b993fe 100644
+--- a/crates/router/src/core/payments/flows/complete_authorize_flow.rs
++++ b/crates/router/src/core/payments/flows/complete_authorize_flow.rs
+@@ -535,6 +535,7 @@ async fn call_unified_connector_service_authenticate(
+     let connector_auth_metadata = ucs_core::build_unified_connector_service_auth_metadata(
+         merchant_connector_account,
+         platform,
++        router_data.connector.clone(),
+     )
+     .change_context(ApiErrorResponse::InternalServerError)
+     .attach_printable("Failed to construct request metadata")?;
+@@ -652,6 +653,7 @@ async fn call_unified_connector_service_post_authenticate(
+     let connector_auth_metadata = ucs_core::build_unified_connector_service_auth_metadata(
+         merchant_connector_account,
+         platform,
++        router_data.connector.clone(),
+     )
+     .change_context(ApiErrorResponse::InternalServerError)
+     .attach_printable("Failed to construct request metadata")?;
+@@ -871,6 +873,7 @@ async fn call_unified_connector_service_complete_authorize(
+     let connector_auth_metadata = ucs_core::build_unified_connector_service_auth_metadata(
+         merchant_connector_account,
+         platform,
++        router_data.connector.clone(),
+     )
+     .change_context(ApiErrorResponse::InternalServerError)
+     .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/flows/external_proxy_flow.rs b/crates/router/src/core/payments/flows/external_proxy_flow.rs
+index 8260d779075..c8a31fe882e 100644
+--- a/crates/router/src/core/payments/flows/external_proxy_flow.rs
++++ b/crates/router/src/core/payments/flows/external_proxy_flow.rs
+@@ -395,6 +395,7 @@ impl Feature<api::ExternalVaultProxy, types::ExternalVaultProxyPaymentsData>
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 platform,
++                self.connector.clone(),
+             )
+             .change_context(ApiErrorResponse::InternalServerError)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/flows/psync_flow.rs b/crates/router/src/core/payments/flows/psync_flow.rs
+index a2235695197..24025c07c53 100644
+--- a/crates/router/src/core/payments/flows/psync_flow.rs
++++ b/crates/router/src/core/payments/flows/psync_flow.rs
+@@ -340,6 +340,7 @@ impl Feature<api::PSync, types::PaymentsSyncData>
+                 let connector_auth_metadata = build_unified_connector_service_auth_metadata(
+                     merchant_connector_account,
+                     platform,
++                    self.connector.clone(),
+                 )
+                 .change_context(ApiErrorResponse::InternalServerError)
+                 .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/flows/setup_mandate_flow.rs b/crates/router/src/core/payments/flows/setup_mandate_flow.rs
+index 051fecbb0ab..1861616bbd5 100644
+--- a/crates/router/src/core/payments/flows/setup_mandate_flow.rs
++++ b/crates/router/src/core/payments/flows/setup_mandate_flow.rs
+@@ -308,10 +308,13 @@ impl Feature<api::SetupMandate, types::SetupMandateRequestData> for types::Setup
+ 
+         let merchant_connector_id = merchant_connector_account.get_mca_id();
+ 
+-        let connector_auth_metadata =
+-            build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-                .change_context(ApiErrorResponse::InternalServerError)
+-                .attach_printable("Failed to construct request metadata")?;
++        let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++            merchant_connector_account,
++            platform,
++            self.connector.clone(),
++        )
++        .change_context(ApiErrorResponse::InternalServerError)
++        .attach_printable("Failed to construct request metadata")?;
+         let merchant_reference_id = header_payload
+             .x_reference_id
+             .clone()
+diff --git a/crates/router/src/core/payments/gateway/access_token_gateway.rs b/crates/router/src/core/payments/gateway/access_token_gateway.rs
+index 16dfeb22bf7..6beff9cf0dd 100644
+--- a/crates/router/src/core/payments/gateway/access_token_gateway.rs
++++ b/crates/router/src/core/payments/gateway/access_token_gateway.rs
+@@ -99,6 +99,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account.clone(),
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/gateway/authorize_gateway.rs b/crates/router/src/core/payments/gateway/authorize_gateway.rs
+index 8bde689c678..fc8f11add49 100644
+--- a/crates/router/src/core/payments/gateway/authorize_gateway.rs
++++ b/crates/router/src/core/payments/gateway/authorize_gateway.rs
+@@ -88,6 +88,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/gateway/create_customer_gateway.rs b/crates/router/src/core/payments/gateway/create_customer_gateway.rs
+index 544f4a0af15..1bd8c861681 100644
+--- a/crates/router/src/core/payments/gateway/create_customer_gateway.rs
++++ b/crates/router/src/core/payments/gateway/create_customer_gateway.rs
+@@ -91,6 +91,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/gateway/create_order_gateway.rs b/crates/router/src/core/payments/gateway/create_order_gateway.rs
+index 8d341779203..1402c831ef7 100644
+--- a/crates/router/src/core/payments/gateway/create_order_gateway.rs
++++ b/crates/router/src/core/payments/gateway/create_order_gateway.rs
+@@ -86,6 +86,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/gateway/payment_method_token_create_gateway.rs b/crates/router/src/core/payments/gateway/payment_method_token_create_gateway.rs
+index 854dcbff087..82c050338f0 100644
+--- a/crates/router/src/core/payments/gateway/payment_method_token_create_gateway.rs
++++ b/crates/router/src/core/payments/gateway/payment_method_token_create_gateway.rs
+@@ -94,6 +94,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/gateway/psync_gateway.rs b/crates/router/src/core/payments/gateway/psync_gateway.rs
+index d0d70b3a8df..ac861ef72fd 100644
+--- a/crates/router/src/core/payments/gateway/psync_gateway.rs
++++ b/crates/router/src/core/payments/gateway/psync_gateway.rs
+@@ -109,6 +109,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/payments/gateway/session_token_gateway.rs b/crates/router/src/core/payments/gateway/session_token_gateway.rs
+index 5c985e9cd40..b61b547a5f4 100644
+--- a/crates/router/src/core/payments/gateway/session_token_gateway.rs
++++ b/crates/router/src/core/payments/gateway/session_token_gateway.rs
+@@ -89,6 +89,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;
+diff --git a/crates/router/src/core/unified_connector_service.rs b/crates/router/src/core/unified_connector_service.rs
+index ab67ab4630c..5e49a6957f7 100644
+--- a/crates/router/src/core/unified_connector_service.rs
++++ b/crates/router/src/core/unified_connector_service.rs
+@@ -978,6 +978,7 @@ pub fn build_unified_connector_service_auth_metadata(
+     #[cfg(feature = "v1")] merchant_connector_account: MerchantConnectorAccountType,
+     #[cfg(feature = "v2")] merchant_connector_account: MerchantConnectorAccountTypeDetails,
+     platform: &Platform,
++    connector_name: String,
+ ) -> CustomResult<ConnectorAuthMetadata, UnifiedConnectorServiceError> {
+     #[cfg(feature = "v1")]
+     let auth_type: ConnectorAuthType = merchant_connector_account
+@@ -992,24 +993,24 @@ pub fn build_unified_connector_service_auth_metadata(
+         .change_context(UnifiedConnectorServiceError::FailedToObtainAuthType)
+         .attach_printable("Failed to obtain ConnectorAuthType")?;
+ 
+-    let connector_name = {
+-        #[cfg(feature = "v1")]
+-        {
+-            merchant_connector_account
+-                .get_connector_name()
+-                .ok_or(UnifiedConnectorServiceError::MissingConnectorName)
+-                .attach_printable("Missing connector name")?
+-        }
+-
+-        #[cfg(feature = "v2")]
+-        {
+-            merchant_connector_account
+-                .get_connector_name()
+-                .map(|connector| connector.to_string())
+-                .ok_or(UnifiedConnectorServiceError::MissingConnectorName)
+-                .attach_printable("Missing connector name")?
+-        }
+-    };
++    // let connector_name = {
++    //     #[cfg(feature = "v1")]
++    //     {
++    //         merchant_connector_account
++    //             .get_connector_name()
++    //             .ok_or(UnifiedConnectorServiceError::MissingConnectorName)
++    //             .attach_printable("Missing connector name")?
++    //     }
++
++    //     #[cfg(feature = "v2")]
++    //     {
++    //         merchant_connector_account
++    //             .get_connector_name()
++    //             .map(|connector| connector.to_string())
++    //             .ok_or(UnifiedConnectorServiceError::MissingConnectorName)
++    //             .attach_printable("Missing connector name")?
++    //     }
++    // };
+ 
+     let merchant_id = platform
+         .get_processor()
+@@ -1472,7 +1473,11 @@ pub async fn call_unified_connector_service_for_webhook(
+                 mca.clone(),
+             ));
+ 
+-            build_unified_connector_service_auth_metadata(mca_type, platform)
++            build_unified_connector_service_auth_metadata(
++                mca_type,
++                platform,
++                connector_name.to_string(),
++            )
+         })
+         .transpose()
+         .change_context(errors::ApiErrorResponse::InternalServerError)
+@@ -1897,10 +1902,13 @@ pub async fn call_unified_connector_service_for_refund_execute(
+     let ucs_client = get_ucs_client(state)?;
+ 
+     // Build auth metadata using standard UCS function
+-    let connector_auth_metadata =
+-        build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-            .change_context(errors::ApiErrorResponse::InternalServerError)
+-            .attach_printable("Failed to build UCS auth metadata for refund execute")?;
++    let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++        merchant_connector_account,
++        platform,
++        router_data.connector.clone(),
++    )
++    .change_context(errors::ApiErrorResponse::InternalServerError)
++    .attach_printable("Failed to build UCS auth metadata for refund execute")?;
+ 
+     // Transform router data to UCS refund request
+     let ucs_refund_request =
+@@ -1968,10 +1976,13 @@ pub async fn call_unified_connector_service_for_refund_sync(
+     let ucs_client = get_ucs_client(state)?;
+ 
+     // Build auth metadata using standard UCS function
+-    let connector_auth_metadata =
+-        build_unified_connector_service_auth_metadata(merchant_connector_account, platform)
+-            .change_context(errors::ApiErrorResponse::InternalServerError)
+-            .attach_printable("Failed to build UCS auth metadata for refund sync")?;
++    let connector_auth_metadata = build_unified_connector_service_auth_metadata(
++        merchant_connector_account,
++        platform,
++        router_data.connector.clone(),
++    )
++    .change_context(errors::ApiErrorResponse::InternalServerError)
++    .attach_printable("Failed to build UCS auth metadata for refund sync")?;
+ 
+     // Transform router data to UCS refund sync request
+     let ucs_refund_sync_request =
+
+From 40a235e8ee878d593debf0c28719523759b0b7e5 Mon Sep 17 00:00:00 2001
+From: Amitsingh Tanwar <amitsingh.tanwar@juspay.in>
+Date: Fri, 28 Nov 2025 16:59:46 +0530
+Subject: [PATCH 2/3] chore: removed the unused code
+
+---
+ .../src/core/unified_connector_service.rs     | 19 -------------------
+ 1 file changed, 19 deletions(-)
+
+diff --git a/crates/router/src/core/unified_connector_service.rs b/crates/router/src/core/unified_connector_service.rs
+index 5e49a6957f7..d9933fce6a6 100644
+--- a/crates/router/src/core/unified_connector_service.rs
++++ b/crates/router/src/core/unified_connector_service.rs
+@@ -993,25 +993,6 @@ pub fn build_unified_connector_service_auth_metadata(
+         .change_context(UnifiedConnectorServiceError::FailedToObtainAuthType)
+         .attach_printable("Failed to obtain ConnectorAuthType")?;
+ 
+-    // let connector_name = {
+-    //     #[cfg(feature = "v1")]
+-    //     {
+-    //         merchant_connector_account
+-    //             .get_connector_name()
+-    //             .ok_or(UnifiedConnectorServiceError::MissingConnectorName)
+-    //             .attach_printable("Missing connector name")?
+-    //     }
+-
+-    //     #[cfg(feature = "v2")]
+-    //     {
+-    //         merchant_connector_account
+-    //             .get_connector_name()
+-    //             .map(|connector| connector.to_string())
+-    //             .ok_or(UnifiedConnectorServiceError::MissingConnectorName)
+-    //             .attach_printable("Missing connector name")?
+-    //     }
+-    // };
+-
+     let merchant_id = platform
+         .get_processor()
+         .get_account()
+
+From 2ac3d0105407560dd03cf494cc0a599428f6ccaa Mon Sep 17 00:00:00 2001
+From: Amitsingh Tanwar <amitsingh.tanwar@juspay.in>
+Date: Tue, 9 Dec 2025 16:25:06 +0530
+Subject: [PATCH 3/3] chore: fixed some merge confict
+
+---
+ crates/router/src/core/payments/gateway/setup_mandate.rs | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/crates/router/src/core/payments/gateway/setup_mandate.rs b/crates/router/src/core/payments/gateway/setup_mandate.rs
+index 5efae6b3cf0..08872b980b7 100644
+--- a/crates/router/src/core/payments/gateway/setup_mandate.rs
++++ b/crates/router/src/core/payments/gateway/setup_mandate.rs
+@@ -84,6 +84,7 @@ where
+             unified_connector_service::build_unified_connector_service_auth_metadata(
+                 merchant_connector_account,
+                 &platform,
++                router_data.connector.clone(),
+             )
+             .change_context(ConnectorError::RequestEncodingFailed)
+             .attach_printable("Failed to construct request metadata")?;

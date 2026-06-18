@@ -1,0 +1,170 @@
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index 65680a743f..f6775e20e8 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -7546,7 +7546,7 @@ where
+     dyn api::Connector:
+         services::api::ConnectorIntegration<F, Req, router_types::PaymentsResponseData>,
+ {
+-    let connector_name = payment_data.get_payment_attempt().connector.clone();
++    let connector_name = merchant_connector_account.get_connector_name_as_string();
+ 
+     let profile_id = payment_data.get_payment_intent().profile_id.clone();
+     let default_gateway_context = gateway_context::RouterGatewayContext::direct(
+@@ -7556,60 +7556,55 @@ where
+         profile_id,
+         payment_data.get_creds_identifier().map(|id| id.to_string()),
+     );
+-    match connector_name {
+-        Some(connector_name) => {
+-            let connector = api::ConnectorData::get_connector_by_name(
+-                &state.conf.connectors,
+-                &connector_name,
+-                api::GetToken::Connector,
+-                merchant_connector_account.get_id(),
+-            )?;
++    let connector = api::ConnectorData::get_connector_by_name(
++        &state.conf.connectors,
++        &connector_name,
++        api::GetToken::Connector,
++        merchant_connector_account.get_id(),
++    )?;
+ 
+-            let (should_call_connector, existing_connector_customer_id) =
+-                customers::should_call_connector_create_customer(
+-                    &connector,
+-                    customer,
+-                    payment_data.get_payment_attempt(),
+-                    merchant_connector_account,
+-                );
++    let (should_call_connector, existing_connector_customer_id) =
++        customers::should_call_connector_create_customer(
++            &connector,
++            customer,
++            Some(payment_data.get_payment_attempt()),
++            merchant_connector_account,
++        );
+ 
+-            if should_call_connector {
+-                // Create customer at connector and update the customer table to store this data
+-                let router_data = payment_data
+-                    .construct_router_data(
+-                        state,
+-                        connector.connector.id(),
+-                        processor,
+-                        customer,
+-                        merchant_connector_account,
+-                        None,
+-                        None,
+-                    )
+-                    .await?;
++    if should_call_connector {
++        // Create customer at connector and update the customer table to store this data
++        let router_data = payment_data
++            .construct_router_data(
++                state,
++                connector.connector.id(),
++                processor,
++                customer,
++                merchant_connector_account,
++                None,
++                None,
++            )
++            .await?;
+ 
+-                let connector_customer_id = router_data
+-                    .create_connector_customer(state, &connector, &default_gateway_context)
+-                    .await?;
++        let connector_customer_id = router_data
++            .create_connector_customer(state, &connector, &default_gateway_context)
++            .await?;
+ 
+-                let customer_update = customers::update_connector_customer_in_customers(
+-                    merchant_connector_account,
+-                    customer.as_ref(),
+-                    connector_customer_id.clone(),
+-                    initiator,
+-                )
+-                .await;
++        let customer_update = customers::update_connector_customer_in_customers(
++            merchant_connector_account,
++            customer.as_ref(),
++            connector_customer_id.clone(),
++            initiator,
++        )
++        .await;
+ 
+-                payment_data.set_connector_customer_id(connector_customer_id);
+-                Ok(customer_update)
+-            } else {
+-                // Customer already created in previous calls use the same value, no need to update
+-                payment_data.set_connector_customer_id(
+-                    existing_connector_customer_id.map(ToOwned::to_owned),
+-                );
+-                Ok(None)
+-            }
+-        }
+-        None => Ok(None),
++        payment_data.set_connector_customer_id(connector_customer_id);
++        Ok(customer_update)
++    } else {
++        // Customer already created in previous calls use the same value, no need to update
++        payment_data.set_connector_customer_id(
++            existing_connector_customer_id.map(ToOwned::to_owned),
++        );
++        Ok(None)
+     }
+ }
+ 
+diff --git a/crates/router/src/core/payments/customers.rs b/crates/router/src/core/payments/customers.rs
+index cb79d998e5..7503fc1f3c 100644
+--- a/crates/router/src/core/payments/customers.rs
++++ b/crates/router/src/core/payments/customers.rs
+@@ -109,15 +109,15 @@ pub fn should_call_connector_create_customer<'a>(
+ pub fn should_call_connector_create_customer<'a>(
+     connector: &api::ConnectorData,
+     customer: &'a Option<domain::Customer>,
+-    payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
++    payment_attempt: Option<&hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt>,
+     merchant_connector_account: &domain::MerchantConnectorAccountTypeDetails,
+ ) -> (bool, Option<&'a str>) {
+     // Check if create customer is required for the connector
+     match merchant_connector_account {
+         domain::MerchantConnectorAccountTypeDetails::MerchantConnectorAccount(_) => {
+-            let connector_needs_customer = connector
+-                .connector
+-                .should_call_connector_customer(payment_attempt);
++            let connector_needs_customer = payment_attempt
++                .map(|attempt| connector.connector.should_call_connector_customer(attempt))
++                .unwrap_or(false);
+ 
+             if connector_needs_customer {
+                 let connector_customer_details = customer
+diff --git a/crates/router/src/core/payments/transformers.rs b/crates/router/src/core/payments/transformers.rs
+index d933b2e26e..c71c3a53bb 100644
+--- a/crates/router/src/core/payments/transformers.rs
++++ b/crates/router/src/core/payments/transformers.rs
+@@ -1330,9 +1330,7 @@ pub async fn construct_payment_router_data_for_sdk_session<'a>(
+         .clone()
+         .and_then(|tax| tax.get_default_tax_amount());
+ 
+-    let payment_attempt = payment_data.get_payment_attempt();
+-    let payment_method = Some(payment_attempt.payment_method_type);
+-    let payment_method_type = payment_attempt.payment_method_subtype;
++    let (payment_method, payment_method_type) = (None, None);
+ 
+     // TODO: few fields are repeated in both routerdata and request
+     let request = types::PaymentsSessionData {
+diff --git a/crates/router/src/core/payments/vault_session.rs b/crates/router/src/core/payments/vault_session.rs
+index 431d099044..5a2d5dc9ea 100644
+--- a/crates/router/src/core/payments/vault_session.rs
++++ b/crates/router/src/core/payments/vault_session.rs
+@@ -176,7 +176,7 @@ where
+                 customers::should_call_connector_create_customer(
+                     &connector,
+                     customer,
+-                    payment_data.get_payment_attempt(),
++                    None,
+                     merchant_connector_account_type,
+                 );
+ 

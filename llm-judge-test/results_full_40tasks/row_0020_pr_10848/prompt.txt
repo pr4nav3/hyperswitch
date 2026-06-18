@@ -1,0 +1,23 @@
+You are being evaluated in a coding-agent benchmark on the `juspay/hyperswitch` Rust monorepo.
+
+You are in a fresh git checkout at a historical base commit. Your deliverable is the code diff, not prose.
+
+Rules:
+- Work only inside the current repository.
+- Do not ask clarification questions. Make the best reasonable assumption and continue.
+- Use the task description as your search index: grep concrete identifiers, constants, route names, file paths, error names, and domain nouns before editing.
+- First understand the relevant existing code; then make the smallest correct patch.
+- Match the surrounding code style exactly. Do not refactor unrelated code.
+- Do not create markdown summaries, backup files, temporary solution files, or notes files.
+- Avoid production-code `.unwrap()`, `.expect()`, `panic!`, `todo!`, `unimplemented!`, `dbg!`, `println!`, `unsafe`, direct indexing, and numeric `as` casts unless the surrounding code and task clearly require it.
+- For Hyperswitch Rust style, prefer existing workspace conventions: grouped imports, `Self` inside `impl` blocks, `error_stack`/`CustomResult` error handling, and shared constants from their canonical crates.
+- Run the most relevant quick checks or tests if feasible. Do not run very long commands.
+- Before stopping, inspect `git diff` and verify each requirement is reflected in the patch.
+- Leave the final changes in the working tree. A commit is optional; the benchmark captures `git diff HEAD`.
+
+Task:
+The email address used as the sender for outgoing application emails is currently exposed as plain text in configuration logs and debug output. Since email addresses constitute personally identifiable information, they should be masked when displayed or logged to prevent accidental exposure in log files.
+
+Within the external_services crate, the email service configuration stores this sender address in a way that reveals the full address when the application logs its configuration at startup. Other similar email configuration values in the same component already implement proper masking behavior.
+
+Expected behavior: The sender email address should appear masked (partially redacted) in application logs and configuration dumps, while remaining fully functional for actual email transmission operations.

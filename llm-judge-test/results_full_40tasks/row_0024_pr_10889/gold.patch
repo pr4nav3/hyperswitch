@@ -1,0 +1,133 @@
+From d9287d7a69af214fde7e83a415088f996942a9b3 Mon Sep 17 00:00:00 2001
+From: nithin <nithin.n@juspay.in>
+Date: Fri, 9 Jan 2026 16:59:48 +0530
+Subject: [PATCH 1/2] fix(connector): [worldpaymodular] capture issue
+
+---
+ .../src/connectors/worldpaymodular/transformers.rs            | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs b/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs
+index 0215721e22f..b365bd4ef93 100644
+--- a/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs
+@@ -186,8 +186,8 @@ impl
+         Ok(Self {
+             instruction: Instruction {
+                 request_auto_settlement: RequestAutoSettlement {
+-                    enabled: item.router_data.request.capture_method
+-                        == Some(enums::CaptureMethod::Automatic),
++                    enabled: item.router_data.request.capture_method.unwrap_or_default()
++                        == enums::CaptureMethod::Automatic,
+                 },
+                 value: PaymentValue {
+                     amount: item.amount,
+
+From 1ff6bf6c4d1ae7605135a6760e0e2baff313b02a Mon Sep 17 00:00:00 2001
+From: nithin <nithin.n@juspay.in>
+Date: Fri, 9 Jan 2026 17:55:38 +0530
+Subject: [PATCH 2/2] update
+
+---
+ .../worldpaymodular/transformers.rs           | 52 +++++++++----------
+ .../worldpaymodular/transformers/request.rs   |  6 +--
+ 2 files changed, 28 insertions(+), 30 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs b/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs
+index b365bd4ef93..2608f897901 100644
+--- a/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers.rs
+@@ -4,8 +4,7 @@ use api_models::payments::{MandateIds, MandateReferenceId};
+ use base64::Engine;
+ use common_enums::{enums, Currency, PaymentChannel};
+ use common_utils::{
+-    consts::BASE64_ENGINE, errors::CustomResult, ext_traits::OptionExt, pii::SecretSerdeValue,
+-    types::MinorUnit,
++    consts::BASE64_ENGINE, errors::CustomResult, pii::SecretSerdeValue, types::MinorUnit,
+ };
+ use error_stack::ResultExt;
+ use hyperswitch_domain_models::{
+@@ -64,28 +63,24 @@ fn fetch_payment_instrument(
+     billing_address: Option<&Address>,
+     connector_mandate_id: Option<MandateIds>,
+ ) -> CustomResult<PaymentInstrument, ConnectorError> {
+-    let billing_address =
+-        if let Some(address) = billing_address.and_then(|addr| addr.address.clone()) {
+-            Some(BillingAddress {
+-                address1: address.line1,
+-                address2: address.line2,
+-                address3: address.line3,
+-                city: address.city,
+-                state: address.state,
+-                postal_code: address
+-                    .zip
+-                    .get_required_value("zip")
+-                    .change_context(ConnectorError::MissingRequiredField { field_name: "zip" })?,
+-                country_code: address
+-                    .country
+-                    .get_required_value("country_code")
+-                    .change_context(ConnectorError::MissingRequiredField {
+-                        field_name: "country_code",
+-                    })?,
+-            })
+-        } else {
+-            None
+-        };
++    let billing_address = billing_address
++        .and_then(|addr| addr.address.clone())
++        .and_then(
++            |address| match (address.line1, address.city, address.zip, address.country) {
++                (Some(address1), Some(city), Some(postal_code), Some(country_code)) => {
++                    Some(BillingAddress {
++                        address1,
++                        address2: address.line2,
++                        address3: address.line3,
++                        city,
++                        state: address.state,
++                        postal_code,
++                        country_code,
++                    })
++                }
++                _ => None,
++            },
++        );
+     match payment_method {
+         PaymentMethodData::MandatePayment => {
+             let mandate_id = connector_mandate_id
+@@ -186,8 +181,13 @@ impl
+         Ok(Self {
+             instruction: Instruction {
+                 request_auto_settlement: RequestAutoSettlement {
+-                    enabled: item.router_data.request.capture_method.unwrap_or_default()
+-                        == enums::CaptureMethod::Automatic,
++                    enabled: match item.router_data.request.capture_method.unwrap_or_default() {
++                        enums::CaptureMethod::Automatic
++                        | enums::CaptureMethod::SequentialAutomatic => true,
++                        enums::CaptureMethod::Manual
++                        | enums::CaptureMethod::ManualMultiple
++                        | enums::CaptureMethod::Scheduled => false,
++                    },
+                 },
+                 value: PaymentValue {
+                     amount: item.amount,
+diff --git a/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers/request.rs b/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers/request.rs
+index aa0e3a5de1b..521bb2c4cc6 100644
+--- a/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers/request.rs
++++ b/crates/hyperswitch_connectors/src/connectors/worldpaymodular/transformers/request.rs
+@@ -4,14 +4,12 @@ use serde::{Deserialize, Serialize};
+ #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct BillingAddress {
+-    #[serde(skip_serializing_if = "Option::is_none")]
+-    pub address1: Option<Secret<String>>,
++    pub address1: Secret<String>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     pub address2: Option<Secret<String>>,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     pub address3: Option<Secret<String>>,
+-    #[serde(skip_serializing_if = "Option::is_none")]
+-    pub city: Option<String>,
++    pub city: String,
+     #[serde(skip_serializing_if = "Option::is_none")]
+     pub state: Option<Secret<String>>,
+     pub postal_code: Secret<String>,

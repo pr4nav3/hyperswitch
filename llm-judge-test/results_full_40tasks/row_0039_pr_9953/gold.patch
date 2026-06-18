@@ -1,0 +1,138 @@
+From e0f184eabf5d9e88460aaa69ca3d3226be71af15 Mon Sep 17 00:00:00 2001
+From: AkshayaFoiger <akshaya.shankar@juspay.in>
+Date: Wed, 22 Oct 2025 15:08:42 +0530
+Subject: [PATCH 1/3] fix paypal extended authorization
+
+---
+ .../src/connectors/paypal/transformers.rs     | 39 +++++++++++++++----
+ 1 file changed, 32 insertions(+), 7 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+index 3bcf66af57f..520d32fc6cb 100644
+--- a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+@@ -1516,12 +1516,15 @@ impl TryFrom<&PaypalRouterData<&PaymentsIncrementalAuthorizationRouterData>>
+ #[derive(Debug, Deserialize, Serialize)]
+ #[serde(rename_all = "snake_case")]
+ pub struct PaypalExtendedAuthResponse {
+-    status: PaypalIncrementalStatus,
++    status: PaypalExtendedAuthorizationStatus,
+     status_details: Option<PaypalIncrementalAuthStatusDetails>,
+     id: String,
+     links: Vec<PaypalLinks>,
++    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
+     expiration_time: Option<PrimitiveDateTime>,
++    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
+     create_time: Option<PrimitiveDateTime>,
++    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
+     update_time: Option<PrimitiveDateTime>,
+ }
+ 
+@@ -1555,6 +1558,17 @@ pub enum PaypalIncrementalStatus {
+     PENDING,
+ }
+ 
++#[derive(Debug, Clone, Deserialize, Serialize)]
++#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
++pub enum PaypalExtendedAuthorizationStatus {
++    Created,
++    Captured,
++    Denied,
++    PartiallyCaptured,
++    Voided,
++    Pending,
++}
++
+ #[derive(Debug, Deserialize, Serialize)]
+ pub struct PaypalNetworkTransactionReference {
+     id: String,
+@@ -1595,18 +1609,29 @@ impl From<PaypalIncrementalStatus> for common_enums::AttemptStatus {
+         }
+     }
+ }
++impl From<PaypalExtendedAuthorizationStatus> for common_enums::AttemptStatus {
++    fn from(item: PaypalExtendedAuthorizationStatus) -> Self {
++        match item {
++            PaypalExtendedAuthorizationStatus::Created
++            | PaypalExtendedAuthorizationStatus::Captured
++            | PaypalExtendedAuthorizationStatus::PartiallyCaptured => Self::Authorized,
++            PaypalExtendedAuthorizationStatus::Pending => Self::Pending,
++            PaypalExtendedAuthorizationStatus::Denied | PaypalExtendedAuthorizationStatus::Voided => Self::Failure,
++        }
++    }
++}
+ 
+ fn is_extend_authorization_applied(
+-    item: PaypalIncrementalStatus,
++    item: PaypalExtendedAuthorizationStatus,
+ ) -> Option<common_types::primitive_wrappers::ExtendedAuthorizationAppliedBool> {
+     match item {
+-        PaypalIncrementalStatus::CREATED
+-        | PaypalIncrementalStatus::CAPTURED
+-        | PaypalIncrementalStatus::PARTIALLYCAPTURED => {
++        PaypalExtendedAuthorizationStatus::Created
++        | PaypalExtendedAuthorizationStatus::Captured
++        | PaypalExtendedAuthorizationStatus::PartiallyCaptured => {
+             Some(common_types::primitive_wrappers::ExtendedAuthorizationAppliedBool::from(true))
+         }
+-        PaypalIncrementalStatus::PENDING => None,
+-        PaypalIncrementalStatus::DENIED | PaypalIncrementalStatus::VOIDED => {
++        PaypalExtendedAuthorizationStatus::Pending => None,
++        PaypalExtendedAuthorizationStatus::Denied | PaypalExtendedAuthorizationStatus::Voided => {
+             Some(common_types::primitive_wrappers::ExtendedAuthorizationAppliedBool::from(false))
+         }
+     }
+
+From ea9c7da9fbef50859c1fe53702f681cb20e5aeb3 Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Wed, 22 Oct 2025 10:07:41 +0000
+Subject: [PATCH 2/3] chore: run formatter
+
+---
+ .../src/connectors/paypal/transformers.rs                      | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+index 520d32fc6cb..d7afeeba078 100644
+--- a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+@@ -1616,7 +1616,8 @@ impl From<PaypalExtendedAuthorizationStatus> for common_enums::AttemptStatus {
+             | PaypalExtendedAuthorizationStatus::Captured
+             | PaypalExtendedAuthorizationStatus::PartiallyCaptured => Self::Authorized,
+             PaypalExtendedAuthorizationStatus::Pending => Self::Pending,
+-            PaypalExtendedAuthorizationStatus::Denied | PaypalExtendedAuthorizationStatus::Voided => Self::Failure,
++            PaypalExtendedAuthorizationStatus::Denied
++            | PaypalExtendedAuthorizationStatus::Voided => Self::Failure,
+         }
+     }
+ }
+
+From ec3988dec280ad70b22d9fc668ece5866a7d7f98 Mon Sep 17 00:00:00 2001
+From: AkshayaFoiger <akshaya.shankar@juspay.in>
+Date: Wed, 22 Oct 2025 17:08:03 +0530
+Subject: [PATCH 3/3] remove deafult
+
+---
+ .../src/connectors/paypal/transformers.rs                   | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+index d7afeeba078..aea2d587403 100644
+--- a/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/paypal/transformers.rs
+@@ -1520,11 +1520,11 @@ pub struct PaypalExtendedAuthResponse {
+     status_details: Option<PaypalIncrementalAuthStatusDetails>,
+     id: String,
+     links: Vec<PaypalLinks>,
+-    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
++    #[serde(with = "common_utils::custom_serde::iso8601::option")]
+     expiration_time: Option<PrimitiveDateTime>,
+-    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
++    #[serde(with = "common_utils::custom_serde::iso8601::option")]
+     create_time: Option<PrimitiveDateTime>,
+-    #[serde(default, with = "common_utils::custom_serde::iso8601::option")]
++    #[serde(with = "common_utils::custom_serde::iso8601::option")]
+     update_time: Option<PrimitiveDateTime>,
+ }
+ 

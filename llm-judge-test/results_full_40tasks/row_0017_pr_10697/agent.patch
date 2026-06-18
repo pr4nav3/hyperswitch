@@ -1,0 +1,53 @@
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs b/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
+index 7157cf947f..d719f757b5 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
+@@ -376,16 +376,40 @@ impl<F> TryFrom<StoredPaymentCounterparty<'_, F>>
+                     .router_data
+                     .get_connector_customer_id()?;
+ 
++                let mut first_name = stored_payment
++                    .item
++                    .router_data
++                    .get_optional_billing_first_name();
++                let mut last_name = stored_payment
++                    .item
++                    .router_data
++                    .get_optional_billing_last_name();
++
++                if first_name.is_none() || last_name.is_none() {
++                    if let Some(customer_details) = request.customer_details.as_ref() {
++                        if let Some(customer_name) = customer_details.name.as_ref() {
++                            let name_parts: Vec<&str> =
++                                customer_name.clone().expose().split_whitespace().collect();
++                            if first_name.is_none() {
++                                first_name = name_parts
++                                    .first()
++                                    .map(|s| Secret::new(s.to_string()));
++                            }
++                            if last_name.is_none() {
++                                let remaining_names: Vec<&str> =
++                                    name_parts.iter().skip(1).copied().collect();
++                                if !remaining_names.is_empty() {
++                                    last_name = Some(Secret::new(remaining_names.join(" ")));
++                                }
++                            }
++                        }
++                    }
++                }
++
+                 let card_holder = AdyenAccountHolder {
+                     address: Some(address),
+-                    first_name: stored_payment
+-                        .item
+-                        .router_data
+-                        .get_optional_billing_first_name(),
+-                    last_name: stored_payment
+-                        .item
+-                        .router_data
+-                        .get_optional_billing_last_name(),
++                    first_name,
++                    last_name,
+                     full_name: stored_payment
+                         .item
+                         .router_data

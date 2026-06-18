@@ -1,0 +1,40 @@
+diff --git a/crates/hyperswitch_connectors/src/connectors/nexixpay/transformers.rs b/crates/hyperswitch_connectors/src/connectors/nexixpay/transformers.rs
+index 708f48a2c1..6ed23a8c60 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nexixpay/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nexixpay/transformers.rs
+@@ -1361,16 +1361,30 @@ impl TryFrom<&NexixpayRouterData<&PaymentsCompleteAuthorizeRouterData>>
+         let nexixpay_meta_data =
+             serde_json::from_value::<NexixpayConnectorMetaData>(connector_metadata)
+                 .change_context(errors::ConnectorError::ParsingFailed)?;
+-        let operation_id = nexixpay_meta_data.authorization_operation_id.ok_or(
+-            errors::ConnectorError::MissingRequiredField {
++        let redirect_payload = item
++            .router_data
++            .request
++            .redirect_response
++            .as_ref()
++            .and_then(|redirect| redirect.payload.as_ref())
++            .and_then(|payload| {
++                serde_json::from_value::<RedirectPayload>(payload.clone().expose()).ok()
++            });
++        let operation_id = redirect_payload
++            .as_ref()
++            .and_then(|payload| payload.payment_id.clone())
++            .or(nexixpay_meta_data.authorization_operation_id)
++            .ok_or(errors::ConnectorError::MissingRequiredField {
+                 field_name: "authorization_operation_id",
+-            },
+-        )?;
++            })?;
+         let authentication_value = nexixpay_meta_data
+             .three_d_s_auth_result
+             .and_then(|data| data.authentication_value);
++        let three_d_s_auth_response = redirect_payload
++            .and_then(|payload| payload.pa_res)
++            .or(nexixpay_meta_data.three_d_s_auth_response);
+         let three_d_s_auth_data = ThreeDSAuthData {
+-            three_d_s_auth_response: nexixpay_meta_data.three_d_s_auth_response,
++            three_d_s_auth_response,
+             authentication_value,
+         };
+         let card: Result<NexixpayCard, error_stack::Report<errors::ConnectorError>> =

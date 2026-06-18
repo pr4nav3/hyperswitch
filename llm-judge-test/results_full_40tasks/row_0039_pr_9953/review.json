@@ -1,0 +1,14 @@
+{
+  "type": "step_start",
+  "timestamp": 1781735227344,
+  "sessionID": "ses_1284e15cfffeimwdADYIM7VkYK",
+  "part": {
+    "id": "prt_ed7b1ffcc001IaG8xEQXtI5LU6",
+    "messageID": "msg_ed7b1ea9d0015Vw2rhT62lhsA8",
+    "sessionID": "ses_1284e15cfffeimwdADYIM7VkYK",
+    "snapshot": "b593f936399cc24502a836d492e23db76bc42ab5",
+    "type": "step-start"
+  },
+  "parse_error": false,
+  "returncode": 0
+}

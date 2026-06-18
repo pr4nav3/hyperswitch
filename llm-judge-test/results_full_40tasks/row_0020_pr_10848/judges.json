@@ -1,0 +1,345 @@
+[
+  {
+    "reasoning": "The agent correctly changed EmailSettings.sender_email from String to pii::Email, which masks the email in EmailSettings debug/logs. However, the agent then eagerly stripped the mask by calling .peek().to_owned() in the constructors of AwsSes (ses.rs:99) and SmtpServer (smtp.rs:69), storing the result in sender fields that remain typed as String. Because String has no masking behavior, the full email address is still exposed whenever AwsSes or SmtpServer are debug-printed or logged. The reference patch changes those sender fields to pii::Email and only calls .peek() at the actual usage sites (send_email), ensuring masking persists through all layers. The agent also left the usage sites unchanged (ses.rs:225 uses .to_owned(), smtp.rs:159 uses .clone()), which happens to compile because sender is still String, but misses the structural improvement. Cargo check passed; the rustfmt failure was environmental (missing fmt toolchain). There is no runtime logic bug—emails still send correctly—but the privacy/masking goal is only half achieved.",
+    "correctness": 6.0,
+    "completeness": 6.0,
+    "convention_adherence": 6.0,
+    "hygiene": 9.0,
+    "overall": 6.45,
+    "correctness_bugs": [
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "sender field remains String instead of pii::Email, so AwsSes Debug output still leaks the full email address",
+        "evidence": "Line 22: `sender: String`, and line 99 assigns via `conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "sender field remains String instead of pii::Email, so SmtpServer Debug output still leaks the full email address",
+        "evidence": "Line 20: `pub sender: String`, and line 69 assigns via `conf.sender_email.peek().to_owned()`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Persist PII masking through AwsSes.sender and SmtpServer.sender fields rather than stripping at construction time",
+        "evidence": "The reference patch changes both fields to pii::Email and defers .peek() to the send_email call sites"
+      },
+      {
+        "requirement": "Update send_email usage sites to use .peek() on the pii::Email sender field",
+        "evidence": "ses.rs line 225 still uses .to_owned() and smtp.rs line 159 still uses .clone() because sender remained String"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time",
+        "evidence": "ses.rs:99 stores `conf.sender_email.peek().to_owned()` into `sender: String`; smtp.rs:69 does the same. Other fields like EmailSettings.recon_recipient_email and SmtpServerConfig.username demonstrate the convention of keeping sensitive values wrapped in masking types."
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent correctly changed `EmailSettings.sender_email` from `String` to `pii::Email`, which matches the reference patch and ensures the email is masked when the top-level settings struct is logged. However, the agent then eagerly stripped the masking by calling `peek().to_owned()` in the constructors of `AwsSes` and `SmtpServer`, storing the result back into `String` fields. Because these struct fields remain `String`, their `Debug` output still exposes the full, unmasked email address — defeating half the purpose of the task. Additionally, the `send_email` usage sites were left untouched (using `.to_owned()`/`.clone()` on `String`) rather than being updated to call `.peek()` on a `pii::Email` field as the reference patch does. Compilation passes, but the masking behavior is incomplete.",
+    "correctness": 5.0,
+    "completeness": 4.0,
+    "convention_adherence": 6.0,
+    "hygiene": 10.0,
+    "overall": 5.65,
+    "correctness_bugs": [
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "`sender` field remains `String` instead of `pii::Email`, so `Debug` output of `AwsSes` leaks the full email address",
+        "evidence": "Line 22: `sender: String`, line 99: `sender: conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "`sender` field remains `String` instead of `pii::Email`, so `Debug` output of `SmtpServer` leaks the full email address",
+        "evidence": "Line 20: `sender: String`, line 69: `sender: conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "Usage site still calls `.to_owned()` on a `String`, missing the opportunity to call `.peek()` on a masked field",
+        "evidence": "Line 225: `.from_email_address(self.sender.to_owned())`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "Usage site still calls `.clone()` on a `String`, missing the opportunity to call `.peek()` on a masked field",
+        "evidence": "Line 159: `.from(Self::to_mail_box(self.sender.clone())?)`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Mask the sender email in `AwsSes` struct logs and debug output",
+        "evidence": "`AwsSes.sender` is still `String`, so `Debug` prints the raw email"
+      },
+      {
+        "requirement": "Mask the sender email in `SmtpServer` struct logs and debug output",
+        "evidence": "`SmtpServer.sender` is still `String`, so `Debug` prints the raw email"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time",
+        "evidence": "ses.rs line 99: `conf.sender_email.peek().to_owned()` assigned to `sender: String`; smtp.rs line 69: same pattern"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  },
+  {
+    "type": "tool_use",
+    "timestamp": 1781724677072,
+    "sessionID": "ses_128f0fbffffeqEDW741cJneu2m",
+    "part": {
+      "type": "tool",
+      "tool": "read",
+      "callID": "chatcmpl-tool-8a0811995a133432",
+      "state": {
+        "status": "completed",
+        "input": {
+          "filePath": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/judge_06_row_0020_pr_10848/crates/external_services/src/email.rs"
+        },
+        "output": "<path>/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/judge_06_row_0020_pr_10848/crates/external_services/src/email.rs</path>\n<type>file</type>\n<content>\n1: //! Interactions with the AWS SES SDK\n2: \n3: use aws_sdk_sesv2::types::Body;\n4: use common_utils::{errors::CustomResult, pii};\n5: use serde::Deserialize;\n6: \n7: /// Implementation of aws ses client\n8: pub mod ses;\n9: \n10: /// Implementation of SMTP server client\n11: pub mod smtp;\n12: \n13: /// Implementation of Email client when email support is disabled\n14: pub mod no_email;\n15: \n16: /// Custom Result type alias for Email operations.\n17: pub type EmailResult<T> = CustomResult<T, EmailError>;\n18: \n19: /// A trait that defines the methods that must be implemented to send email.\n20: #[async_trait::async_trait]\n21: pub trait EmailClient: Sync + Send + dyn_clone::DynClone {\n22:     /// The rich text type of the email client\n23:     type RichText;\n24: \n25:     /// Sends an email to the specified recipient with the given subject and body.\n26:     async fn send_email(\n27:         &self,\n28:         recipient: pii::Email,\n29:         subject: String,\n30:         body: Self::RichText,\n31:         proxy_url: Option<&String>,\n32:     ) -> EmailResult<()>;\n33: \n34:     /// Convert Stringified HTML to client native rich text format\n35:     /// This has to be done because not all clients may format html as the same\n36:     fn convert_to_rich_text(\n37:         &self,\n38:         intermediate_string: IntermediateString,\n39:     ) -> CustomResult<Self::RichText, EmailError>\n40:     where\n41:         Self::RichText: Send;\n42: }\n43: \n44: /// A super trait which is automatically implemented for all EmailClients\n45: #[async_trait::async_trait]\n46: pub trait EmailService: Sync + Send + dyn_clone::DynClone {\n47:     /// Compose and send email using the email data\n48:     async fn compose_and_send_email(\n49:         &self,\n50:         base_url: &str,\n51:         email_data: Box<dyn EmailData + Send>,\n52:         proxy_url: Option<&String>,\n53:     ) -> EmailResult<()>;\n54: }\n55: \n56: #[async_trait::async_trait]\n57: impl<T> EmailService for T\n58: where\n59:     T: EmailClient,\n60:     <Self as EmailClient>::RichText: Send,\n61: {\n62:     async fn compose_and_send_email(\n63:         &self,\n64:         base_url: &str,\n65:         email_data: Box<dyn EmailData + Send>,\n66:         proxy_url: Option<&String>,\n67:     ) -> EmailResult<()> {\n68:         let email_data = email_data.get_email_data(base_url);\n69:         let email_data = email_data.await?;\n70: \n71:         let EmailContents {\n72:             subject,\n73:             body,\n74:             recipient,\n75:         } = email_data;\n76: \n77:         let rich_text_string = self.convert_to_rich_text(body)?;\n78: \n79:         self.send_email(recipient, subject, rich_text_string, proxy_url)\n80:             .await\n81:     }\n82: }\n83: \n84: /// This is a struct used to create Intermediate String for rich text ( html )\n85: #[derive(Debug)]\n86: pub struct IntermediateString(String);\n87: \n88: impl IntermediateString {\n89:     /// Create a new Instance of IntermediateString using a string\n90:     pub fn new(inner: String) -> Self {\n91:         Self(inner)\n92:     }\n93: \n94:     /// Get the inner String\n95:     pub fn into_inner(self) -> String {\n96:         self.0\n97:     }\n98: }\n99: \n100: /// Temporary output for the email subject\n101: #[derive(Debug)]\n102: pub struct EmailContents {\n103:     /// The subject of email\n104:     pub subject: String,\n105: \n106:     /// This will be the intermediate representation of the email body in a generic format.\n107:     /// The email clients can convert this intermediate representation to their client specific rich text format\n108:     pub body: IntermediateString,\n109: \n110:     /// The email of the recipient to whom the email has to be sent\n111:     pub recipient: pii::Email,\n112: }\n113: \n114: /// A trait which will contain the logic of generating the email subject and body\n115: #[async_trait::async_trait]\n116: pub trait EmailData {\n117:     /// Get the email contents\n118:     async fn get_email_data(&self, base_url: &str) -> CustomResult<EmailContents, EmailError>;\n119: }\n120: \n121: dyn_clone::clone_trait_object!(EmailClient<RichText = Body>);\n122: \n123: /// List of available email clients to choose from\n124: #[derive(Debug, Clone, Default, Deserialize)]\n125: #[serde(tag = \"active_email_client\")]\n126: #[serde(rename_all = \"SCREAMING_SNAKE_CASE\")]\n127: pub enum EmailClientConfigs {\n128:     #[default]\n129:     /// Default Email client to use when no client is specified\n130:     NoEmailClient,\n131:     /// AWS ses email client\n132:     Ses {\n133:         /// AWS SES client configuration\n134:         aws_ses: ses::SESConfig,\n135:     },\n136:     /// Other Simple SMTP server\n137:     Smtp {\n138:         /// SMTP server configuration\n139:         smtp: smtp::SmtpServerConfig,\n140:     },\n141: }\n142: \n143: /// Struct that contains the settings required to construct an EmailClient.\n144: #[derive(Debug, Clone, Default, Deserialize)]\n145: #[serde(default)]\n146: pub struct EmailSettings {\n147:     /// The AWS region to send SES requests to.\n148:     pub aws_region: String,\n149: \n150:     /// Number of days for verification of the email\n151:     pub allowed_unverified_days: i64,\n152: \n153:     /// Sender email\n154:     pub sender_email: pii::Email,\n155: \n156:     #[serde(flatten)]\n157:     /// The client specific configurations\n158:     pub client_config: EmailClientConfigs,\n159: \n160:     /// Recipient email for recon emails\n161:     pub recon_recipient_email: pii::Email,\n162: \n163:     /// Recipient email for recon emails\n164:     pub prod_intent_recipient_email: pii::Email,\n165: }\n166: \n167: impl EmailSettings {\n168:     /// Validation for the Email client specific configurations\n169:     pub fn validate(&self) -> Result<(), &'static str> {\n170:         match &self.client_config {\n171:             EmailClientConfigs::Ses { ref aws_ses } => aws_ses.validate(),\n172:             EmailClientConfigs::Smtp { ref smtp } => smtp.validate(),\n173:             EmailClientConfigs::NoEmailClient => Ok(()),\n174:         }\n175:     }\n176: }\n177: \n178: /// Errors that could occur from EmailClient.\n179: #[derive(Debug, thiserror::Error)]\n180: pub enum EmailError {\n181:     /// An error occurred when building email client.\n182:     #[error(\"Error building email client\")]\n183:     ClientBuildingFailure,\n184: \n185:     /// An error occurred when sending email\n186:     #[error(\"Error sending email to recipient\")]\n187:     EmailSendingFailure,\n188: \n189:     /// Failed to generate the email token\n190:     #[error(\"Failed to generate email token\")]\n191:     TokenGenerationFailure,\n192: \n193:     /// The expected feature is not implemented\n194:     #[error(\"Feature not implemented\")]\n195:     NotImplemented,\n196: \n197:     /// An error occurred when building email content.\n198:     #[error(\"Error building email content\")]\n199:     ContentBuildFailure,\n200: }\n\n(End of file - total 200 lines)\n</content>\n\n[Project README: /Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/judge_06_row_0020_pr_10848/README.md]\n<p align=\"center\">\n  <img src=\"./docs/imgs/hyperswitch-logo-dark.svg#gh-dark-mode-only\" alt=\"Hyperswitch-Logo\" width=\"40%\" />\n  <img src=\"./docs/imgs/hyperswitch-logo-light.svg#gh-light-mode-only\" alt=\"Hyperswitch-Logo\" width=\"40%\" />\n</p>\n\n<h1 align=\"center\">Composable Open-Source Payments Infrastructure</h1>\n\n<p align=\"center\">\n  <img src=\"https://raw.githubusercontent.com/juspay/hyperswitch/main/docs/gifs/quickstart.gif\" alt=\"Quickstart demo\" />\n</p>\n\n\n<!-- @import \"[TOC]\" {cmd=\"toc\" depthFrom=1 depthTo=6 orderedList=false} -->\n\n<p align=\"center\">\n  <a href=\"https://github.com/juspay/hyperswitch/actions?query=workflow%3ACI+branch%3Amain\">\n    <img src=\"https://github.com/juspay/hyperswitch/workflows/CI-push/badge.svg\" />\n  </a>\n  <a href=\"https://github.com/juspay/hyperswitch/blob/main/LICENSE\">\n    <img src=\"https://img.shields.io/github/license/juspay/hyperswitch\" />\n  </a>\n  <a href=\"https://github.com/juspay/hyperswitch/blob/main/LICENSE\">\n    <img src=\"https://img.shields.io/badge/Made_in-Rust-orange\" />\n  </a>\n</p>\n\n<p align=\"center\">\n  <a href=\"https://www.linkedin.com/company/hyperswitch/\">\n    <img src=\"https://img.shields.io/badge/follow-hyperswitch-blue?logo=linkedin&labelColor=grey\"/>\n  </a>\n  <a href=\"https://x.com/hyperswitchio\">\n    <img src=\"https://img.shields.io/badge/follow-%40hyperswitchio-white?logo=x&labelColor=grey\"/>\n  </a>\n  <a href=\"https://inviter.co/hyperswitch-slack\">\n    <img src=\"https://img.shields.io/badge/chat-on_slack-blue?logo=slack&labelColor=grey&color=%233f0e40\"/>\n  </a>\n</p>\n\n<hr/>\n\n<details>\n<summary><strong>📁 Table of Contents</strong></summary>\n\n- [What Can I Do with Hyperswitch?](#-what-can-i-do-with-hyperswitch)\n- [Quickstart (Local Setup)](#-quickstart-local-setup)\n- [Cloud Deployment](#cloud-deployment)\n- [Hosted Sandbox (No Setup Required)](#hosted-sandbox-no-setup-required)\n- [Why Hyperswitch?](#-why-hyperswitch)\n- [Architectural Overview](#architectural-overview)\n- [Our Vision](#our-vision)\n- [Community & Contributions](#community--contributions)\n- [Feature Requests & Bugs](#feature-requests--bugs)\n- [Versioning](#versioning)\n- [License](#copyright-and-license)\n- [Team Behind Hyperswitch](#team-behind-hyperswitch)\n\n</details>\n\n<summary><h2> What Can I Do with Hyperswitch?</h2></summary>\n\nHyperswitch offers a modular, open-source payments infrastructure designed for flexibility and control. Apart from our Payment Suite offering, this solution allows businesses to pick and integrate only the modules they need on top of their existing payment stack — without unnecessary complexity or vendor lock-in.\n\nEach module is independent and purpose-built to optimize different aspects of payment processing.\n\n<h3> Learn More About The Payment Modules </h3>\n<details>\n\n- **Cost Observability**  \n  Advanced observability tools to audit, monitor, and optimize your payment costs. Detect hidden fees, downgrades, and penalties with self-serve dashboards and actionable insights.  \n  _[Read more](https://docs.hyperswitch.io/about-hyperswitch/payments-modules/ai-powered-cost-observability)_\n\n- **Revenue Recovery**  \n  Combat passive churn with intelligent retry strategies tuned by card bin, region, method, and more. Offers fine-grained control over retry algorithms, penalty budgets, and recovery transparency.  \n  _[Read more](https://docs.hyperswitch.io/about-hyperswitch/payments-modules/revenue-recovery)_\n\n- **Vault**  \n  A PCI-compliant vault service to store cards, tokens, wallets, and bank credentials. Provides a unified, secure, and reusable store of customer-linked payment methods.  \n  _[Read more](https://docs.hyperswitch.io/about-hyperswitch/payments-modules/vault)_\n\n- **Intelligent Routing**  \n  Route each transaction to the PSP with the highest predicted auth rate. Reduce retries, avoid downtime, and minimize latency while maximizing first attempt success.  \n  _[Read more](https://docs.hyperswitch.io/about-hyperswitch/payments-modules/intelligent-routing)_\n\n- **Reconciliation**  \n  Automate 2-way and 3-way reconciliation with backdated support, staggered scheduling, and customizable outputs. Reduces manual ops effort and increases audit confidence.  \n  _[Read more](https://docs.hyperswitch.io/about-hyperswitch/payments-modules/reconciliation)_\n\n- **Alternate Payment Methods**  \n  Drop-in widgets for PayPal, Apple Pay, Google Pay, Samsung Pay, Pay by Bank, and BNPL providers like Klarna. Maximizes conversions with seamless one-click checkout.  \n  _[Read more](https://docs.hyperswitch.io/about-hyperswitch/payments-modules/enable-alternate-payment-method-widgets)_\n\n</details>\n\n## Quickstart \n\n<h3> Local Setup via Docker </h3>\n\n```bash\n# One-click local setup\n\ngit clone --depth 1 --branch latest https://github.com/juspay/hyperswitch\n\ncd hyperswitch\n\nscripts/setup.sh\n```\n<details>\n  <summary><strong>This script: </strong></summary>\n\n  - Detects Docker/Podman  \n  - Offers multiple deployment profiles:\n    - **Standard**: App server + Control Center  \n    - **Full**: Includes monitoring + schedulers  \n    - **Minimal**: Standalone App server  \n  - Provides access links when done\n\n  If you need further help, check out our [video tutorial](https://docs.hyperswitch.io/hyperswitch-open-source/overview/unified-local-setup-using-docker).  \n\n  👉 After setup, [configure a connector](https://docs.hyperswitch.io/hyperswitch-open-source/account-setup/using-hyperswitch-control-center#add-a-payment-processor) and [test a payment](https://docs.hyperswitch.io/hyperswitch-open-source/account-setup/test-a-payment).\n</details>\n\n\n<h3>Hosted Sandbox (No Setup Required)</h3>\n\nHyperswitch offers a fully hosted sandbox environment that requires no setup. You can explore the Control Center, configure payment connectors, and test payments directly from the UI.\n\n   <a href=\"https://app.hyperswitch.io\">\n     <img src=\"https://github.com/juspay/hyperswitch/blob/main/docs/imgs/try-the-sandbox.png?raw=true\" height=\"35\">\n   </a>\n\n\n<details>\n  <summary><strong> What you can do in the Hosted Sandbox</strong></summary>\n\n  - Access the full Control Center  \n  - Configure payment connectors  \n  - View logs, routing rules, and retry strategies  \n  - Try payments directly from the UI  \n</details>\n\n<h3><strong>Cloud Deployment</strong></h3>\n\nYou can deploy to AWS, GCP, or Azure using Helm or CDK scripts. Fastest path:\n\nClick to deploy via AWS:\n\n   <a href=\"https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=HyperswitchBootstarp&templateURL=https://hyperswitch-synth.s3.eu-central-1.amazonaws.com/hs-starter-config.yaml\">\n     <img src=\"https://github.com/juspay/hyperswitch/blob/main/docs/imgs/aws_button.png?raw=true\" height=\"35\">\n   </a>\n\n<details>\n  <summary><strong>Cloud Deployment Instructions</strong></summary>\n\n  1. Click the AWS deployment button above to launch the stack.  \n  2. Follow the guided steps in the AWS Console (approx. 30–45 mins).  \n\n  ✅ This setup provisions Hyperswitch on your cloud account using CloudFormation.  \n\n  📘 For full instructions and Helm-based deployments, check out the  \n  <a href=\"https://docs.hyperswitch.io/hyperswitch-open-source/deploy-on-kubernetes-using-helm\">Cloud Install Guide</a>.\n</details>\n\n\n<a href=\"#architectural-overview\">\n  <h2 id=\"architectural-overview\">Architectural Overview</h2>\n</a>\n<img src=\"./docs/imgs/features.png\" />\n<img src=\"./docs/imgs/non-functional-features.png\" />\n<img src=\"./docs/imgs/hyperswitch-architecture-v1.png\" />\n\n## Why Hyperswitch?\n\nHyperswitch is a commercial open-source payments stack purpose-built for scale, flexibility, and developer experience. Designed with a modular architecture, Hyperswitch lets you pick only the components you need—whether it’s routing, retries, vaulting, or observability—without vendor lock-in or bloated integrations.\n\nBuilt in Rust for performance and reliability, Hyperswitch supports global payment methods (cards, wallets, BNPL, UPI, Pay by Bank), exposes smart routing and retry logic, and provides a visual workflow builder in the Control Center. Whether you're integrating a full payment suite or augmenting an existing stack with a single module, Hyperswitch meets you where you are.\n\n<strong>“Linux for Payments”</strong> — Hyperswitch is a well-architected reference for teams who want to own their payments stack.\n\nWe believe in:\n\n- <strong> Embracing Payment Diversity:</strong> Innovation comes from enabling choice—across payment methods, processors, and flows.\n\n- <strong> Open Source by Default:</strong> Transparency drives trust and builds better, reusable software.\n\n- <strong> Community-Driven Development:</strong> Our roadmap is shaped by real-world use cases and contributors. \n\n- <strong> Systems-Level Engineering:</strong> We hold ourselves to a high bar for reliability, security, and performance.\n\n- <strong> Maximizing Value Creation:</strong> For developers, customers, and partners alike.\n\n- <strong> Community-Driven, Enterprise-Tested:</strong> Hyperswitch is built in the open with real-world feedback from developers and contributors, and maintained by Juspay, the team powering payment infrastructure for 400+ leading enterprises worldwide.\n\n## Contributing\n\nWe welcome contributors from around the world to help build Hyperswitch. Whether you're fixing bugs, improving documentation, or adding new features, your help is appreciated.\n\nPlease read our [contributing guidelines](https://github.com/juspay/hyperswitch/blob/main/docs/CONTRIBUTING.md) to get started.\n\nJoin the conversation on [Slack](https://inviter.co/hyperswitch-slack) or explore open issues on [GitHub](https://github.com/juspay/hyperswitch/issues).\n\n<a href=\"#feature-requests\">\n  <h2 id=\"feature-requests\">Feature requests & Bugs</h2>\n</a>\n\nFor new product features, enhancements, roadmap discussions, or to share queries and ideas, visit our [GitHub Discussions](https://github.com/juspay/hyperswitch/discussions)\n\nFor reporting a bug, please read the issue guidelines and search for [existing and closed issues](https://github.com/juspay/hyperswitch/issues). If your problem or idea is not addressed yet, please [open a new issue](https://github.com/juspay/hyperswitch/issues/new/choose).\n\n<a href=\"#versioning\">\n  <h2 id=\"versioning\">Versioning</h2>\n</a>\n\nCheck the [CHANGELOG.md](./CHANGELOG.md) file for details.\n\n<a href=\"#copyright-and-license\">\n  <h2 id=\"copyright-and-license\">Copyright and License</h2>\n</a>\n\nThis product is licensed under the [Apache 2.0 License](LICENSE).\n\n<a href=\"#team-behind-hyperswitch\">\n  <h2 id=\"team-behind-hyperswitch\">Team behind Hyperswitch</h2>\n</a>\n\nThe core team of 150+ engineers building Hyperswitch. Keep up the great work! 🥂\n\n<a href=\"https://github.com/juspay/hyperswitch/graphs/contributors\">\n  <img src=\"https://contributors-img.web.app/image?repo=juspay/hyperswitch\" alt=\"Contributors\"/>\n</a>\n\n\n[Project README: /Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/judge_06_row_0020_pr_10848/crates/external_services/README.md]\n# External Services\n\nThis crate includes interactions with external systems, which may be shared\nacross crates within this workspace.\n",
+        "metadata": {
+          "preview": "//! Interactions with the AWS SES SDK\n\nuse aws_sdk_sesv2::types::Body;\nuse common_utils::{errors::CustomResult, pii};\nuse serde::Deserialize;\n\n/// Implementation of aws ses client\npub mod ses;\n\n/// Implementation of SMTP server client\npub mod smtp;\n\n/// Implementation of Email client when email support is disabled\npub mod no_email;\n\n/// Custom Result type alias for Email operations.\npub type EmailResult<T> = CustomResult<T, EmailError>;\n\n/// A trait that defines the methods that must be implemented to send email.\n#[async_trait::async_trait]",
+          "truncated": false,
+          "loaded": [],
+          "display": {
+            "type": "file",
+            "path": "/Users/pranav.karthik/Work/hyperswitch/llm-judge-test/worktrees/judge_06_row_0020_pr_10848/crates/external_services/src/email.rs",
+            "text": "//! Interactions with the AWS SES SDK\n\nuse aws_sdk_sesv2::types::Body;\nuse common_utils::{errors::CustomResult, pii};\nuse serde::Deserialize;\n\n/// Implementation of aws ses client\npub mod ses;\n\n/// Implementation of SMTP server client\npub mod smtp;\n\n/// Implementation of Email client when email support is disabled\npub mod no_email;\n\n/// Custom Result type alias for Email operations.\npub type EmailResult<T> = CustomResult<T, EmailError>;\n\n/// A trait that defines the methods that must be implemented to send email.\n#[async_trait::async_trait]\npub trait EmailClient: Sync + Send + dyn_clone::DynClone {\n    /// The rich text type of the email client\n    type RichText;\n\n    /// Sends an email to the specified recipient with the given subject and body.\n    async fn send_email(\n        &self,\n        recipient: pii::Email,\n        subject: String,\n        body: Self::RichText,\n        proxy_url: Option<&String>,\n    ) -> EmailResult<()>;\n\n    /// Convert Stringified HTML to client native rich text format\n    /// This has to be done because not all clients may format html as the same\n    fn convert_to_rich_text(\n        &self,\n        intermediate_string: IntermediateString,\n    ) -> CustomResult<Self::RichText, EmailError>\n    where\n        Self::RichText: Send;\n}\n\n/// A super trait which is automatically implemented for all EmailClients\n#[async_trait::async_trait]\npub trait EmailService: Sync + Send + dyn_clone::DynClone {\n    /// Compose and send email using the email data\n    async fn compose_and_send_email(\n        &self,\n        base_url: &str,\n        email_data: Box<dyn EmailData + Send>,\n        proxy_url: Option<&String>,\n    ) -> EmailResult<()>;\n}\n\n#[async_trait::async_trait]\nimpl<T> EmailService for T\nwhere\n    T: EmailClient,\n    <Self as EmailClient>::RichText: Send,\n{\n    async fn compose_and_send_email(\n        &self,\n        base_url: &str,\n        email_data: Box<dyn EmailData + Send>,\n        proxy_url: Option<&String>,\n    ) -> EmailResult<()> {\n        let email_data = email_data.get_email_data(base_url);\n        let email_data = email_data.await?;\n\n        let EmailContents {\n            subject,\n            body,\n            recipient,\n        } = email_data;\n\n        let rich_text_string = self.convert_to_rich_text(body)?;\n\n        self.send_email(recipient, subject, rich_text_string, proxy_url)\n            .await\n    }\n}\n\n/// This is a struct used to create Intermediate String for rich text ( html )\n#[derive(Debug)]\npub struct IntermediateString(String);\n\nimpl IntermediateString {\n    /// Create a new Instance of IntermediateString using a string\n    pub fn new(inner: String) -> Self {\n        Self(inner)\n    }\n\n    /// Get the inner String\n    pub fn into_inner(self) -> String {\n        self.0\n    }\n}\n\n/// Temporary output for the email subject\n#[derive(Debug)]\npub struct EmailContents {\n    /// The subject of email\n    pub subject: String,\n\n    /// This will be the intermediate representation of the email body in a generic format.\n    /// The email clients can convert this intermediate representation to their client specific rich text format\n    pub body: IntermediateString,\n\n    /// The email of the recipient to whom the email has to be sent\n    pub recipient: pii::Email,\n}\n\n/// A trait which will contain the logic of generating the email subject and body\n#[async_trait::async_trait]\npub trait EmailData {\n    /// Get the email contents\n    async fn get_email_data(&self, base_url: &str) -> CustomResult<EmailContents, EmailError>;\n}\n\ndyn_clone::clone_trait_object!(EmailClient<RichText = Body>);\n\n/// List of available email clients to choose from\n#[derive(Debug, Clone, Default, Deserialize)]\n#[serde(tag = \"active_email_client\")]\n#[serde(rename_all = \"SCREAMING_SNAKE_CASE\")]\npub enum EmailClientConfigs {\n    #[default]\n    /// Default Email client to use when no client is specified\n    NoEmailClient,\n    /// AWS ses email client\n    Ses {\n        /// AWS SES client configuration\n        aws_ses: ses::SESConfig,\n    },\n    /// Other Simple SMTP server\n    Smtp {\n        /// SMTP server configuration\n        smtp: smtp::SmtpServerConfig,\n    },\n}\n\n/// Struct that contains the settings required to construct an EmailClient.\n#[derive(Debug, Clone, Default, Deserialize)]\n#[serde(default)]\npub struct EmailSettings {\n    /// The AWS region to send SES requests to.\n    pub aws_region: String,\n\n    /// Number of days for verification of the email\n    pub allowed_unverified_days: i64,\n\n    /// Sender email\n    pub sender_email: pii::Email,\n\n    #[serde(flatten)]\n    /// The client specific configurations\n    pub client_config: EmailClientConfigs,\n\n    /// Recipient email for recon emails\n    pub recon_recipient_email: pii::Email,\n\n    /// Recipient email for recon emails\n    pub prod_intent_recipient_email: pii::Email,\n}\n\nimpl EmailSettings {\n    /// Validation for the Email client specific configurations\n    pub fn validate(&self) -> Result<(), &'static str> {\n        match &self.client_config {\n            EmailClientConfigs::Ses { ref aws_ses } => aws_ses.validate(),\n            EmailClientConfigs::Smtp { ref smtp } => smtp.validate(),\n            EmailClientConfigs::NoEmailClient => Ok(()),\n        }\n    }\n}\n\n/// Errors that could occur from EmailClient.\n#[derive(Debug, thiserror::Error)]\npub enum EmailError {\n    /// An error occurred when building email client.\n    #[error(\"Error building email client\")]\n    ClientBuildingFailure,\n\n    /// An error occurred when sending email\n    #[error(\"Error sending email to recipient\")]\n    EmailSendingFailure,\n\n    /// Failed to generate the email token\n    #[error(\"Failed to generate email token\")]\n    TokenGenerationFailure,\n\n    /// The expected feature is not implemented\n    #[error(\"Feature not implemented\")]\n    NotImplemented,\n\n    /// An error occurred when building email content.\n    #[error(\"Error building email content\")]\n    ContentBuildFailure,\n}",
+            "lineStart": 1,
+            "lineEnd": 200,
+            "totalLines": 200,
+            "truncated": false
+          }
+        },
+        "title": "crates/external_services/src/email.rs",
+        "time": {
+          "start": 1781724677043,
+          "end": 1781724677071
+        }
+      },
+      "id": "prt_ed71103a7001oEdDTGUtlbwHx3",
+      "sessionID": "ses_128f0fbffffeqEDW741cJneu2m",
+      "messageID": "msg_ed70f0519001eAb3sIfJo89n8b"
+    },
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  },
+  {
+    "reasoning": "The agent correctly changed `EmailSettings.sender_email` from `String` to `pii::Email`, which masks the email in the primary configuration struct's Debug output. However, the agent kept `AwsSes.sender` and `SmtpServer.sender` as `String` types, eagerly calling `.peek().to_owned()` in the constructors to strip the PII wrapper. This means the email address remains fully exposed in the Debug output of `AwsSes` and `SmtpServer` structs, failing to achieve the masking goal for those configuration objects. The reference patch instead propagates `pii::Email` into those structs and defers `.peek()` to the actual send sites. The agent also missed updating the send_email usage sites, though this happens to compile because the fields remained `String`. There is one clear convention violation: PII masking types should persist through struct fields rather than being unwrapped at construction time. The changes are hygienic—focused on only the relevant files with no unrelated churn. Compilation passed; the rustfmt failure is environmental.",
+    "correctness": 6.0,
+    "completeness": 6.0,
+    "convention_adherence": 7.0,
+    "hygiene": 9.0,
+    "overall": 6.65,
+    "correctness_bugs": [
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "AwsSes.sender remains String, so Debug output of AwsSes still leaks the full email address",
+        "evidence": "Line 22: `sender: String`, constructor assigns `conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "SmtpServer.sender remains String, so Debug output of SmtpServer still leaks the full email address",
+        "evidence": "Line 20: `sender: String`, constructor assigns `conf.sender_email.peek().to_owned()`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Mask sender email in all application logs and configuration dumps including client struct debug output",
+        "evidence": "AwsSes and SmtpServer structs still expose plaintext sender email because their sender fields are String instead of pii::Email"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time via peek()",
+        "evidence": "ses.rs constructor: `sender: conf.sender_email.peek().to_owned()` stored into `sender: String`; smtp.rs constructor: same pattern"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  },
+  {
+    "reasoning": "The agent correctly changed `EmailSettings.sender_email` from `String` to `pii::Email` in `email.rs`, which ensures masking when the top-level settings struct is logged. However, the agent then stripped the masking by calling `peek().to_owned()` in the constructors of both `AwsSes` (ses.rs:99) and `SmtpServer` (smtp.rs:69), storing the result into `sender: String` fields. This means `AwsSes` and `SmtpServer` still expose the full raw email in their own `Debug` output, defeating half the masking goal. The gold patch instead keeps `sender` as `pii::Email` in both structs and only calls `.peek()` at the actual transmission sites (send_email). Compilation passed, and email sending remains functional, but the security requirement is only partially satisfied. The core convention violated is that PII masking types should persist through struct fields rather than being eagerly unpacked into plain strings.",
+    "correctness": 5.0,
+    "completeness": 5.0,
+    "convention_adherence": 6.0,
+    "hygiene": 9.0,
+    "overall": 5.8,
+    "correctness_bugs": [
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "AwsSes.sender remains String instead of pii::Email, so Debug output leaks full email",
+        "evidence": "Line 22: `sender: String`; line 99: `sender: conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "SmtpServer.sender remains String instead of pii::Email, so Debug output leaks full email",
+        "evidence": "Line 20: `pub sender: String`; line 69: `sender: conf.sender_email.peek().to_owned()`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Mask sender email in AwsSes and SmtpServer struct logs/debug output",
+        "evidence": "Both structs keep sender as plain String, printing full email when debug-formatted"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time",
+        "evidence": "ses.rs:99 `sender: conf.sender_email.peek().to_owned()` stored into `sender: String`; smtp.rs:69 `sender: conf.sender_email.peek().to_owned()` stored into `sender: String`"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  },
+  {
+    "reasoning": "The agent correctly changed `EmailSettings.sender_email` from `String` to `pii::Email`, which masks the email in the primary configuration struct's Debug output. However, the agent then eagerly called `peek().to_owned()` in the constructors of `AwsSes` and `SmtpServer`, storing the raw value into `sender: String` fields. This means the email address is still fully exposed when those client structs are debug-logged, defeating the masking purpose for two of the three relevant structs. The reference patch keeps `sender` as `pii::Email` in both `AwsSes` and `SmtpServer`, calling `peek()` only at the point of use in `send_email`. The agent also missed updating the usage sites in `send_email` to use `.peek()` (though this compiles because the fields remain `String`). The compilation passed, and email transmission functionality remains intact, so there is no runtime bug—but the masking is incomplete. Convention-wise, the codebase pattern is to keep PII types wrapped through struct fields rather than stripping them at construction time, which the agent violated. Hygiene is excellent: only three files were touched and every line changed is directly relevant to the task.",
+    "correctness": 5.0,
+    "completeness": 5.0,
+    "convention_adherence": 6.0,
+    "hygiene": 10.0,
+    "overall": 5.95,
+    "correctness_bugs": [
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "sender field remains String instead of pii::Email, so AwsSes Debug output still leaks the full email address",
+        "evidence": "Line 22: `sender: String`, and line 99 assigns via `conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "sender field remains String instead of pii::Email, so SmtpServer Debug output still leaks the full email address",
+        "evidence": "Line 20: `sender: String`, and line 69 assigns via `conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "send_email usage site still calls .to_owned() on String instead of .peek() on pii::Email",
+        "evidence": "Line 225: `.from_email_address(self.sender.to_owned())`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "send_email usage site still calls .clone() on String instead of .peek() on pii::Email",
+        "evidence": "Line 159: `.from(Self::to_mail_box(self.sender.clone())?)`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "sender field in AwsSes should be pii::Email to ensure masking in all debug output",
+        "evidence": "ses.rs line 22 remains `sender: String` instead of `sender: pii::Email`"
+      },
+      {
+        "requirement": "sender field in SmtpServer should be pii::Email to ensure masking in all debug output",
+        "evidence": "smtp.rs line 20 remains `sender: String` instead of `sender: pii::Email`"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time",
+        "evidence": "ses.rs constructor stores `conf.sender_email.peek().to_owned()` into `sender: String`; smtp.rs constructor stores `conf.sender_email.peek().to_owned()` into `sender: String`"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  },
+  {
+    "reasoning": "The agent correctly changed `EmailSettings.sender_email` from `String` to `pii::Email`, which ensures the sender email is masked when the top-level configuration is logged at startup. However, the agent then immediately stripped that masking by calling `peek().to_owned()` in the constructors of `AwsSes` and `SmtpServer`, storing the result back into `String` fields. Consequently, those structs' own `Debug` output continues to expose the full raw email address. The reference patch preserves `pii::Email` throughout the internal structs and only calls `peek()` at the actual point of use (`send_email`), ensuring masking is maintained everywhere. The agent also failed to update the `send_email` usage sites to call `peek()`, though this is moot since the fields remained `String`. Compilation passed successfully; the rustfmt failure was environmental. Overall, the agent partially achieved the stated goal but violated the project's established PII-masking convention by stripping the mask at construction time.",
+    "correctness": 5.0,
+    "completeness": 5.0,
+    "convention_adherence": 6.0,
+    "hygiene": 9.0,
+    "overall": 5.8,
+    "correctness_bugs": [
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "sender field remains String instead of pii::Email, so AwsSes Debug output leaks the full email",
+        "evidence": "Line 22: `sender: String`, constructor assigns `conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "sender field remains String instead of pii::Email, so SmtpServer Debug output leaks the full email",
+        "evidence": "Line 20: `sender: String`, constructor assigns `conf.sender_email.peek().to_owned()`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Mask sender email in AwsSes struct debug/logs by keeping sender as pii::Email",
+        "evidence": "ses.rs defines `sender: String` instead of `pii::Email`"
+      },
+      {
+        "requirement": "Mask sender email in SmtpServer struct debug/logs by keeping sender as pii::Email",
+        "evidence": "smtp.rs defines `sender: String` instead of `pii::Email`"
+      },
+      {
+        "requirement": "Use .peek() at send_email usage sites instead of clone/to_owned",
+        "evidence": "ses.rs line 225 and smtp.rs line 159 still use String clone/to_owned, missing the pattern from the reference patch"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time",
+        "evidence": "ses.rs stores `conf.sender_email.peek().to_owned()` into `sender: String`"
+      },
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time",
+        "evidence": "smtp.rs stores `conf.sender_email.peek().to_owned()` into `sender: String`"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  },
+  {
+    "reasoning": "The agent correctly changed EmailSettings.sender_email from String to pii::Email, which masks the email in EmailSettings debug/logs. However, the agent then prematurely called .peek().to_owned() in the AwsSes and SmtpServer constructors, converting the pii::Email back into a plain String stored in those structs. This means the email address remains fully exposed in the Debug output of AwsSes and SmtpServer—defeating the masking purpose in those contexts. The gold patch instead keeps sender as pii::Email in both structs and only calls .peek() at the actual usage sites in send_email. The agent also missed updating the send_email calls to use .peek(), though this happens to compile because the fields remained String. Compilation succeeded, and the email transmission functionality works, but the core masking requirement is only half-satisfied.",
+    "correctness": 5.0,
+    "completeness": 5.0,
+    "convention_adherence": 7.0,
+    "hygiene": 9.0,
+    "overall": 6.0,
+    "correctness_bugs": [
+      {
+        "file": "crates/external_services/src/email/ses.rs",
+        "issue": "sender field remains String instead of pii::Email, so AwsSes Debug output leaks full email",
+        "evidence": "Line 22: `sender: String`, assigned via `conf.sender_email.peek().to_owned()`"
+      },
+      {
+        "file": "crates/external_services/src/email/smtp.rs",
+        "issue": "sender field remains String instead of pii::Email, so SmtpServer Debug output leaks full email",
+        "evidence": "Line 20: `sender: String`, assigned via `conf.sender_email.peek().to_owned()`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Keep sender as pii::Email in AwsSes struct to mask it in debug output",
+        "evidence": "ses.rs line 22 still uses String"
+      },
+      {
+        "requirement": "Keep sender as pii::Email in SmtpServer struct to mask it in debug output",
+        "evidence": "smtp.rs line 20 still uses String"
+      },
+      {
+        "requirement": "Use .peek() at send_email call site in ses.rs",
+        "evidence": "ses.rs line 225 still uses .to_owned() on String"
+      },
+      {
+        "requirement": "Use .peek() at send_email call site in smtp.rs",
+        "evidence": "smtp.rs line 159 still uses .clone() on String"
+      }
+    ],
+    "convention_violations": [
+      {
+        "convention": "PII masking should persist through struct fields, not be stripped at construction time",
+        "evidence": "ses.rs stores `conf.sender_email.peek().to_owned()` into `sender: String`; smtp.rs does the same"
+      }
+    ],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  }
+]

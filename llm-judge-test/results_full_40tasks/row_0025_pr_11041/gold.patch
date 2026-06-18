@@ -1,0 +1,127 @@
+From 2eb76fc780e2d4828d207cd89663f584b220ce7e Mon Sep 17 00:00:00 2001
+From: Anurag Singh <anurag.singh.001@Anurag-Singh-WPMHJ5619X.local>
+Date: Fri, 23 Jan 2026 12:37:51 +0530
+Subject: [PATCH 1/2] fix(connector): fix pre-auth conditions in nmi, nuvei and
+ redsys
+
+---
+ crates/hyperswitch_connectors/src/connectors/nmi.rs |  6 +++---
+ .../hyperswitch_connectors/src/connectors/nuvei.rs  |  9 ++++++---
+ .../hyperswitch_connectors/src/connectors/redsys.rs | 13 ++++++++-----
+ 3 files changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/nmi.rs b/crates/hyperswitch_connectors/src/connectors/nmi.rs
+index 94811143031..5656ab12b8b 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nmi.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nmi.rs
+@@ -56,7 +56,7 @@ use transformers as nmi;
+ 
+ use crate::{
+     types::ResponseRouterData,
+-    utils::{self, convert_amount, get_header_key_value},
++    utils::{self, convert_amount, get_header_key_value, PaymentsAuthorizeRequestData},
+ };
+ 
+ #[derive(Clone)]
+@@ -1188,9 +1188,9 @@ impl ConnectorSpecifications for Nmi {
+     fn is_pre_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+             api::CurrentFlowInfo::Authorize {
+-                request_data: _,
+                 auth_type,
+-            } => *auth_type == enums::AuthenticationType::ThreeDs,
++                request_data,
++            } => auth_type.is_three_ds() && request_data.is_card(),
+             api::CurrentFlowInfo::CompleteAuthorize { .. } => false,
+             api::CurrentFlowInfo::SetupMandate { auth_type, .. } => {
+                 *auth_type == enums::AuthenticationType::ThreeDs
+diff --git a/crates/hyperswitch_connectors/src/connectors/nuvei.rs b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+index 398c1a088aa..f7eea94dcbf 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nuvei.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nuvei.rs
+@@ -71,7 +71,10 @@ use crate::{
+     connectors::nuvei::transformers::{NuveiPaymentsResponse, NuveiTransactionSyncResponse},
+     constants::headers,
+     types::ResponseRouterData,
+-    utils::{self, is_mandate_supported, PaymentMethodDataType, RouterData as _},
++    utils::{
++        self, is_mandate_supported, PaymentMethodDataType, PaymentsAuthorizeRequestData,
++        RouterData as _,
++    },
+ };
+ 
+ #[derive(Clone)]
+@@ -1673,8 +1676,8 @@ impl ConnectorSpecifications for Nuvei {
+         match current_flow {
+             api::CurrentFlowInfo::Authorize {
+                 auth_type,
+-                request_data: _,
+-            } => *auth_type == enums::AuthenticationType::ThreeDs,
++                request_data,
++            } => auth_type.is_three_ds() && request_data.is_card(),
+             api::CurrentFlowInfo::CompleteAuthorize { .. } => false,
+             api::CurrentFlowInfo::SetupMandate { auth_type, .. } => {
+                 *auth_type == enums::AuthenticationType::ThreeDs
+diff --git a/crates/hyperswitch_connectors/src/connectors/redsys.rs b/crates/hyperswitch_connectors/src/connectors/redsys.rs
+index 9a9a78b137e..0065a460939 100644
+--- a/crates/hyperswitch_connectors/src/connectors/redsys.rs
++++ b/crates/hyperswitch_connectors/src/connectors/redsys.rs
+@@ -53,8 +53,10 @@ use hyperswitch_interfaces::{
+ use transformers as redsys;
+ 
+ use crate::{
+-    constants::headers, types::ResponseRouterData, utils as connector_utils,
+-    utils::PaymentsPreAuthenticateRequestData,
++    constants::headers,
++    types::ResponseRouterData,
++    utils as connector_utils,
++    utils::{PaymentsAuthorizeRequestData, PaymentsPreAuthenticateRequestData},
+ };
+ 
+ #[derive(Clone)]
+@@ -975,9 +977,10 @@ static REDSYS_SUPPORTED_WEBHOOK_FLOWS: [common_enums::EventClass; 0] = [];
+ impl ConnectorSpecifications for Redsys {
+     fn is_pre_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+-            api::CurrentFlowInfo::Authorize { auth_type, .. } => {
+-                *auth_type == common_enums::AuthenticationType::ThreeDs
+-            }
++            api::CurrentFlowInfo::Authorize {
++                auth_type,
++                request_data,
++            } => auth_type.is_three_ds() && request_data.is_card(),
+             api::CurrentFlowInfo::CompleteAuthorize { .. } => false,
+             api::CurrentFlowInfo::SetupMandate { .. } => false,
+         }
+
+From d6c0df15cc0e72a8e66d3d0977016fe3ebce4b7a Mon Sep 17 00:00:00 2001
+From: Amitsingh Tanwar <amitsingh.tanwar@juspay.in>
+Date: Tue, 27 Jan 2026 17:47:46 +0530
+Subject: [PATCH 2/2] chore: added nexixpay
+
+---
+ .../hyperswitch_connectors/src/connectors/nexixpay.rs  | 10 +---------
+ 1 file changed, 1 insertion(+), 9 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/nexixpay.rs b/crates/hyperswitch_connectors/src/connectors/nexixpay.rs
+index 19f298228ef..1629d052e7f 100644
+--- a/crates/hyperswitch_connectors/src/connectors/nexixpay.rs
++++ b/crates/hyperswitch_connectors/src/connectors/nexixpay.rs
+@@ -1242,16 +1242,8 @@ impl ConnectorSpecifications for Nexixpay {
+     fn is_post_authentication_flow_required(&self, current_flow: api::CurrentFlowInfo<'_>) -> bool {
+         match current_flow {
+             api::CurrentFlowInfo::Authorize { .. } => false,
+-            api::CurrentFlowInfo::CompleteAuthorize {
+-                request_data,
+-                payment_method,
+-            } => {
++            api::CurrentFlowInfo::CompleteAuthorize { payment_method, .. } => {
+                 payment_method == Some(enums::PaymentMethod::Card)
+-                    && request_data
+-                        .redirect_response
+-                        .as_ref()
+-                        .and_then(|redirect_response| redirect_response.payload.as_ref())
+-                        .is_some()
+             }
+             api::CurrentFlowInfo::SetupMandate { .. } => false,
+         }

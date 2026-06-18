@@ -1,0 +1,382 @@
+From 8bd06f64b8821acc580a766e71f9e9e8bd8a98e3 Mon Sep 17 00:00:00 2001
+From: Prasunna Soppa <prasunna.soppa@juspay.in>
+Date: Sun, 12 Apr 2026 12:36:28 +0530
+Subject: [PATCH 1/3] fix external sdk token flow
+
+---
+ .../src/connectors/authorizedotnet.rs                  |  1 +
+ crates/hyperswitch_connectors/src/connectors/dwolla.rs |  1 +
+ .../src/connectors/facilitapay.rs                      |  1 +
+ crates/hyperswitch_connectors/src/connectors/finix.rs  |  1 +
+ .../src/connectors/gocardless.rs                       |  1 +
+ .../src/connectors/hyperswitch_vault.rs                |  5 +++--
+ .../src/connectors/hyperswitch_vault/transformers.rs   |  7 ++++++-
+ .../hyperswitch_connectors/src/connectors/payload.rs   |  1 +
+ crates/hyperswitch_connectors/src/connectors/stax.rs   |  1 +
+ crates/hyperswitch_connectors/src/connectors/stripe.rs |  1 +
+ crates/hyperswitch_interfaces/src/api.rs               |  1 +
+ .../src/connector_integration_interface.rs             |  7 +++++++
+ crates/router/Cargo.toml                               |  2 +-
+ crates/router/src/core/payments.rs                     |  3 +--
+ crates/router/src/core/payments/customers.rs           |  3 +--
+ crates/router/src/core/payments/transformers.rs        | 10 +++-------
+ crates/router/src/core/payments/vault_session.rs       |  1 -
+ 17 files changed, 31 insertions(+), 16 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/authorizedotnet.rs b/crates/hyperswitch_connectors/src/connectors/authorizedotnet.rs
+index 9d4354dfc00..59721b15ecb 100644
+--- a/crates/hyperswitch_connectors/src/connectors/authorizedotnet.rs
++++ b/crates/hyperswitch_connectors/src/connectors/authorizedotnet.rs
+@@ -1310,6 +1310,7 @@ impl ConnectorSpecifications for Authorizedotnet {
+ 
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_connectors/src/connectors/dwolla.rs b/crates/hyperswitch_connectors/src/connectors/dwolla.rs
+index a9087c58205..3ce4bca52ce 100644
+--- a/crates/hyperswitch_connectors/src/connectors/dwolla.rs
++++ b/crates/hyperswitch_connectors/src/connectors/dwolla.rs
+@@ -1016,6 +1016,7 @@ impl ConnectorSpecifications for Dwolla {
+ 
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_connectors/src/connectors/facilitapay.rs b/crates/hyperswitch_connectors/src/connectors/facilitapay.rs
+index a40816f5bc0..79b8e7cc445 100644
+--- a/crates/hyperswitch_connectors/src/connectors/facilitapay.rs
++++ b/crates/hyperswitch_connectors/src/connectors/facilitapay.rs
+@@ -977,6 +977,7 @@ impl ConnectorSpecifications for Facilitapay {
+ 
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_connectors/src/connectors/finix.rs b/crates/hyperswitch_connectors/src/connectors/finix.rs
+index 6c9513bf30e..2999d68c349 100644
+--- a/crates/hyperswitch_connectors/src/connectors/finix.rs
++++ b/crates/hyperswitch_connectors/src/connectors/finix.rs
+@@ -1094,6 +1094,7 @@ impl ConnectorSpecifications for Finix {
+ 
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_connectors/src/connectors/gocardless.rs b/crates/hyperswitch_connectors/src/connectors/gocardless.rs
+index fe765a46409..d7564b8cdda 100644
+--- a/crates/hyperswitch_connectors/src/connectors/gocardless.rs
++++ b/crates/hyperswitch_connectors/src/connectors/gocardless.rs
+@@ -961,6 +961,7 @@ impl ConnectorSpecifications for Gocardless {
+ 
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault.rs b/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault.rs
+index 286ff4c32c7..357b1299a80 100644
+--- a/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault.rs
++++ b/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault.rs
+@@ -86,7 +86,7 @@ impl ConnectorIntegration<ExternalVaultCreateFlow, VaultRequestData, VaultRespon
+         connectors: &Connectors,
+     ) -> CustomResult<String, errors::ConnectorError> {
+         Ok(format!(
+-            "{}/v2/payment-method-sessions",
++            "{}/payment-method-sessions",
+             self.base_url(connectors)
+         ))
+     }
+@@ -273,7 +273,7 @@ impl ConnectorIntegration<CreateConnectorCustomer, ConnectorCustomerData, Paymen
+         _req: &ConnectorCustomerRouterData,
+         connectors: &Connectors,
+     ) -> CustomResult<String, errors::ConnectorError> {
+-        Ok(format!("{}/v2/customers", self.base_url(connectors)))
++        Ok(format!("{}/customers", self.base_url(connectors)))
+     }
+ 
+     fn get_request_body(
+@@ -499,6 +499,7 @@ impl webhooks::IncomingWebhook for HyperswitchVault {
+ impl ConnectorSpecifications for HyperswitchVault {
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs b/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs
+index e5e586d54c0..c6b7845eeaa 100644
+--- a/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs
+@@ -16,6 +16,7 @@ use crate::{types::ResponseRouterData, utils};
+ #[derive(Default, Debug, Serialize)]
+ pub struct HyperswitchVaultCreateRequest {
+     customer_id: String,
++    storage_type: common_enums::StorageType,
+ }
+ 
+ impl TryFrom<&VaultRouterData<ExternalVaultCreateFlow>> for HyperswitchVaultCreateRequest {
+@@ -26,7 +27,11 @@ impl TryFrom<&VaultRouterData<ExternalVaultCreateFlow>> for HyperswitchVaultCrea
+             .connector_customer_id
+             .clone()
+             .ok_or_else(utils::missing_field_err("connector_customer"))?;
+-        Ok(Self { customer_id })
++
++        Ok(Self { 
++            customer_id, 
++            storage_type: common_enums::StorageType::Persistent,
++         })
+     }
+ }
+ 
+diff --git a/crates/hyperswitch_connectors/src/connectors/payload.rs b/crates/hyperswitch_connectors/src/connectors/payload.rs
+index 370cf28d95e..38678494881 100644
+--- a/crates/hyperswitch_connectors/src/connectors/payload.rs
++++ b/crates/hyperswitch_connectors/src/connectors/payload.rs
+@@ -1162,6 +1162,7 @@ impl ConnectorSpecifications for Payload {
+     }
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         #[cfg(feature = "v1")]
+diff --git a/crates/hyperswitch_connectors/src/connectors/stax.rs b/crates/hyperswitch_connectors/src/connectors/stax.rs
+index c973fe8bf3a..a7ef9706b48 100644
+--- a/crates/hyperswitch_connectors/src/connectors/stax.rs
++++ b/crates/hyperswitch_connectors/src/connectors/stax.rs
+@@ -1037,6 +1037,7 @@ impl ConnectorSpecifications for Stax {
+ 
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_connectors/src/connectors/stripe.rs b/crates/hyperswitch_connectors/src/connectors/stripe.rs
+index e8632007333..197941ae7cf 100644
+--- a/crates/hyperswitch_connectors/src/connectors/stripe.rs
++++ b/crates/hyperswitch_connectors/src/connectors/stripe.rs
+@@ -3338,6 +3338,7 @@ impl ConnectorSpecifications for Stripe {
+ 
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         true
+diff --git a/crates/hyperswitch_interfaces/src/api.rs b/crates/hyperswitch_interfaces/src/api.rs
+index 4837d90c7a7..eea4598d44f 100644
+--- a/crates/hyperswitch_interfaces/src/api.rs
++++ b/crates/hyperswitch_interfaces/src/api.rs
+@@ -537,6 +537,7 @@ pub trait ConnectorSpecifications {
+     /// Connectors should override this method if they require to create a connector customer
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         _payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
+         false
+diff --git a/crates/hyperswitch_interfaces/src/connector_integration_interface.rs b/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
+index da73bbe90a2..b3d12f9821a 100644
+--- a/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
++++ b/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
+@@ -768,12 +768,19 @@ impl ConnectorSpecifications for ConnectorEnum {
+     /// Check if connector requires create customer call
+     fn should_call_connector_customer(
+         &self,
++        #[cfg(feature = "v1")]
+         payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     ) -> bool {
++        #[cfg(feature = "v1")]
+         match self {
+             Self::Old(connector) => connector.should_call_connector_customer(payment_attempt),
+             Self::New(connector) => connector.should_call_connector_customer(payment_attempt),
+         }
++        #[cfg(feature = "v2")]
++        match self {
++            Self::Old(connector) => connector.should_call_connector_customer(),
++            Self::New(connector) => connector.should_call_connector_customer(),
++        }
+     }
+ 
+     fn should_call_tokenization_before_setup_mandate(&self) -> bool {
+diff --git a/crates/router/Cargo.toml b/crates/router/Cargo.toml
+index 3a9eba984bd..bc4abf846b8 100644
+--- a/crates/router/Cargo.toml
++++ b/crates/router/Cargo.toml
+@@ -9,7 +9,7 @@ readme = "README.md"
+ license.workspace = true
+ 
+ [features]
+-default = ["common_default", "v1"]
++default = ["common_default", "v2"]
+ common_default = ["kv_store", "stripe", "oltp", "olap", "accounts_cache", "dummy_connector", "payouts", "payout_retry", "retry", "frm", "tls", "partial-auth", "km_forward_x_request_id", "external_services/superposition"]
+ olap = ["hyperswitch_domain_models/olap", "storage_impl/olap", "scheduler/olap", "api_models/olap", "dep:analytics"]
+ tls = ["actix-web/rustls-0_22"]
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index 2fed7ffa352..50bdf680e95 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -7354,7 +7354,6 @@ where
+                 customers::should_call_connector_create_customer(
+                     &connector,
+                     customer,
+-                    payment_data.get_payment_attempt(),
+                     merchant_connector_account,
+                 );
+ 
+@@ -12351,7 +12350,7 @@ impl<F: Clone> OperationSessionGetters<F> for PaymentIntentData<F> {
+     }
+ 
+     fn get_creds_identifier(&self) -> Option<&str> {
+-        todo!()
++        None
+     }
+ 
+     fn get_token(&self) -> Option<&str> {
+diff --git a/crates/router/src/core/payments/customers.rs b/crates/router/src/core/payments/customers.rs
+index cb79d998e58..b4b50f413cd 100644
+--- a/crates/router/src/core/payments/customers.rs
++++ b/crates/router/src/core/payments/customers.rs
+@@ -109,7 +109,6 @@ pub fn should_call_connector_create_customer<'a>(
+ pub fn should_call_connector_create_customer<'a>(
+     connector: &api::ConnectorData,
+     customer: &'a Option<domain::Customer>,
+-    payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
+     merchant_connector_account: &domain::MerchantConnectorAccountTypeDetails,
+ ) -> (bool, Option<&'a str>) {
+     // Check if create customer is required for the connector
+@@ -117,7 +116,7 @@ pub fn should_call_connector_create_customer<'a>(
+         domain::MerchantConnectorAccountTypeDetails::MerchantConnectorAccount(_) => {
+             let connector_needs_customer = connector
+                 .connector
+-                .should_call_connector_customer(payment_attempt);
++                .should_call_connector_customer();
+ 
+             if connector_needs_customer {
+                 let connector_customer_details = customer
+diff --git a/crates/router/src/core/payments/transformers.rs b/crates/router/src/core/payments/transformers.rs
+index 40ab6775b69..4fd51b9b4d0 100644
+--- a/crates/router/src/core/payments/transformers.rs
++++ b/crates/router/src/core/payments/transformers.rs
+@@ -1326,10 +1326,6 @@ pub async fn construct_payment_router_data_for_sdk_session<'a>(
+         .clone()
+         .and_then(|tax| tax.get_default_tax_amount());
+ 
+-    let payment_attempt = payment_data.get_payment_attempt();
+-    let payment_method = Some(payment_attempt.payment_method_type);
+-    let payment_method_type = payment_attempt.payment_method_subtype;
+-
+     // TODO: few fields are repeated in both routerdata and request
+     let request = types::PaymentsSessionData {
+         amount: payment_data
+@@ -1358,8 +1354,8 @@ pub async fn construct_payment_router_data_for_sdk_session<'a>(
+         metadata: payment_data.payment_intent.metadata,
+         order_tax_amount,
+         shipping_cost: payment_data.payment_intent.amount_details.shipping_cost,
+-        payment_method,
+-        payment_method_type,
++        payment_method: None,
++        payment_method_type: None,
+         split_payments: payment_data.payment_intent.split_payments,
+     };
+ 
+@@ -1377,7 +1373,7 @@ pub async fn construct_payment_router_data_for_sdk_session<'a>(
+         attempt_id: "".to_string(),
+         status: enums::AttemptStatus::Started,
+         payment_method: enums::PaymentMethod::Wallet,
+-        payment_method_type,
++        payment_method_type: Some(enums::PaymentMethodType::GooglePay),
+         connector_auth_type: auth_type,
+         description: payment_data
+             .payment_intent
+diff --git a/crates/router/src/core/payments/vault_session.rs b/crates/router/src/core/payments/vault_session.rs
+index 431d0990441..6140cf3afc6 100644
+--- a/crates/router/src/core/payments/vault_session.rs
++++ b/crates/router/src/core/payments/vault_session.rs
+@@ -176,7 +176,6 @@ where
+                 customers::should_call_connector_create_customer(
+                     &connector,
+                     customer,
+-                    payment_data.get_payment_attempt(),
+                     merchant_connector_account_type,
+                 );
+ 
+
+From d3f685d18131d5cb64b9a2d3ee321a941872230f Mon Sep 17 00:00:00 2001
+From: "hyperswitch-bot[bot]"
+ <148525504+hyperswitch-bot[bot]@users.noreply.github.com>
+Date: Sun, 12 Apr 2026 07:15:01 +0000
+Subject: [PATCH 2/3] chore: run formatter
+
+---
+ .../src/connectors/hyperswitch_vault/transformers.rs        | 6 +++---
+ crates/router/src/core/payments/customers.rs                | 4 +---
+ 2 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs b/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs
+index c6b7845eeaa..430b47f0c1d 100644
+--- a/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/hyperswitch_vault/transformers.rs
+@@ -28,10 +28,10 @@ impl TryFrom<&VaultRouterData<ExternalVaultCreateFlow>> for HyperswitchVaultCrea
+             .clone()
+             .ok_or_else(utils::missing_field_err("connector_customer"))?;
+ 
+-        Ok(Self { 
+-            customer_id, 
++        Ok(Self {
++            customer_id,
+             storage_type: common_enums::StorageType::Persistent,
+-         })
++        })
+     }
+ }
+ 
+diff --git a/crates/router/src/core/payments/customers.rs b/crates/router/src/core/payments/customers.rs
+index b4b50f413cd..bf05b0b6915 100644
+--- a/crates/router/src/core/payments/customers.rs
++++ b/crates/router/src/core/payments/customers.rs
+@@ -114,9 +114,7 @@ pub fn should_call_connector_create_customer<'a>(
+     // Check if create customer is required for the connector
+     match merchant_connector_account {
+         domain::MerchantConnectorAccountTypeDetails::MerchantConnectorAccount(_) => {
+-            let connector_needs_customer = connector
+-                .connector
+-                .should_call_connector_customer();
++            let connector_needs_customer = connector.connector.should_call_connector_customer();
+ 
+             if connector_needs_customer {
+                 let connector_customer_details = customer
+
+From bb780c44be752c774f916c8cfccef838987a03f6 Mon Sep 17 00:00:00 2001
+From: Prasunna Soppa <prasunna.soppa@juspay.in>
+Date: Sun, 12 Apr 2026 21:43:44 +0530
+Subject: [PATCH 3/3] revert cargo.toml
+
+---
+ crates/router/Cargo.toml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/router/Cargo.toml b/crates/router/Cargo.toml
+index bc4abf846b8..3a9eba984bd 100644
+--- a/crates/router/Cargo.toml
++++ b/crates/router/Cargo.toml
+@@ -9,7 +9,7 @@ readme = "README.md"
+ license.workspace = true
+ 
+ [features]
+-default = ["common_default", "v2"]
++default = ["common_default", "v1"]
+ common_default = ["kv_store", "stripe", "oltp", "olap", "accounts_cache", "dummy_connector", "payouts", "payout_retry", "retry", "frm", "tls", "partial-auth", "km_forward_x_request_id", "external_services/superposition"]
+ olap = ["hyperswitch_domain_models/olap", "storage_impl/olap", "scheduler/olap", "api_models/olap", "dep:analytics"]
+ tls = ["actix-web/rustls-0_22"]

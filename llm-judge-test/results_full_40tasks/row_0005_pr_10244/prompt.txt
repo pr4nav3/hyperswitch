@@ -1,0 +1,24 @@
+You are being evaluated in a coding-agent benchmark on the `juspay/hyperswitch` Rust monorepo.
+
+You are in a fresh git checkout at a historical base commit. Your deliverable is the code diff, not prose.
+
+Rules:
+- Work only inside the current repository.
+- Do not ask clarification questions. Make the best reasonable assumption and continue.
+- Use the task description as your search index: grep concrete identifiers, constants, route names, file paths, error names, and domain nouns before editing.
+- First understand the relevant existing code; then make the smallest correct patch.
+- Match the surrounding code style exactly. Do not refactor unrelated code.
+- Do not create markdown summaries, backup files, temporary solution files, or notes files.
+- Avoid production-code `.unwrap()`, `.expect()`, `panic!`, `todo!`, `unimplemented!`, `dbg!`, `println!`, `unsafe`, direct indexing, and numeric `as` casts unless the surrounding code and task clearly require it.
+- For Hyperswitch Rust style, prefer existing workspace conventions: grouped imports, `Self` inside `impl` blocks, `error_stack`/`CustomResult` error handling, and shared constants from their canonical crates.
+- Run the most relevant quick checks or tests if feasible. Do not run very long commands.
+- Before stopping, inspect `git diff` and verify each requirement is reflected in the patch.
+- Leave the final changes in the working tree. A commit is optional; the benchmark captures `git diff HEAD`.
+
+Task:
+In the Unified Connector Service payment flow, merchant connector account metadata containing nested JSON structures is not fully preserved. When metadata includes objects, arrays, or other non-string JSON values, these entries are silently discarded during transformation to internal data structures. This causes downstream failures when connectors expect complete metadata payloads.
+
+All metadata entries should be retained during processing. Non-string JSON values should be converted to their string representation so that nested structures and arrays remain accessible to downstream components.
+
+---
+IMPORTANT: You previously explored the codebase but did not make any code changes. This benchmark measures your ability to produce working patches. Please identify the exact files that need modification and make the minimal correct changes. Do not stop after research—complete the implementation.

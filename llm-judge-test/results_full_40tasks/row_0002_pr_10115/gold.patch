@@ -1,0 +1,232 @@
+From 1a5b4dddf555c9ace61b528641cf118b4a67d988 Mon Sep 17 00:00:00 2001
+From: Sakil Mostak <73734619+Sakilmostak@users.noreply.github.com>
+Date: Tue, 4 Nov 2025 12:42:47 +0530
+Subject: [PATCH] fix(payouts): webhook error consumption (#10096)
+
+---
+ crates/api_models/src/webhooks.rs             |  6 +++
+ crates/common_enums/src/enums.rs              |  9 ++++
+ .../src/connectors/adyenplatform.rs           | 21 ++++++++
+ .../adyenplatform/transformers/payouts.rs     |  6 ++-
+ .../src/connector_integration_interface.rs    | 11 +++++
+ crates/hyperswitch_interfaces/src/webhooks.rs | 12 +++++
+ crates/router/src/core/webhooks/incoming.rs   | 48 ++++++++++++++-----
+ 7 files changed, 100 insertions(+), 13 deletions(-)
+
+diff --git a/crates/api_models/src/webhooks.rs b/crates/api_models/src/webhooks.rs
+index 352386d28cc..26d3e28e4e3 100644
+--- a/crates/api_models/src/webhooks.rs
++++ b/crates/api_models/src/webhooks.rs
+@@ -410,6 +410,12 @@ pub struct IncomingWebhookDetails {
+     pub resource_object: Vec<u8>,
+ }
+ 
++#[cfg(feature = "payouts")]
++pub struct PayoutWebhookUpdate {
++    pub error_message: Option<String>,
++    pub error_code: Option<String>,
++}
++
+ #[derive(Debug, Serialize, ToSchema)]
+ pub struct OutgoingWebhook {
+     /// The merchant id of the merchant
+diff --git a/crates/common_enums/src/enums.rs b/crates/common_enums/src/enums.rs
+index 445569c6b6e..878a25d7b3e 100644
+--- a/crates/common_enums/src/enums.rs
++++ b/crates/common_enums/src/enums.rs
+@@ -8030,6 +8030,15 @@ pub enum PayoutStatus {
+     RequiresVendorAccountCreation,
+ }
+ 
++impl PayoutStatus {
++    pub fn is_payout_failure(&self) -> bool {
++        matches!(
++            self,
++            Self::Failed | Self::Cancelled | Self::Expired | Self::Ineligible
++        )
++    }
++}
++
+ /// The payout_type of the payout request is a mandatory field for confirming the payouts. It should be specified in the Create request. If not provided, it must be updated in the Payout Update request before it can be confirmed.
+ #[derive(
+     Clone,
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs b/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs
+index 7f770603b48..92802dcdc5a 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs
+@@ -362,6 +362,27 @@ impl IncomingWebhook for Adyenplatform {
+         Ok(payload_sign.as_bytes().eq(&signature))
+     }
+ 
++    #[cfg(feature = "payouts")]
++    fn get_payout_webhook_details(
++        &self,
++        request: &IncomingWebhookRequestDetails<'_>,
++    ) -> CustomResult<api_models::webhooks::PayoutWebhookUpdate, ConnectorError> {
++        let webhook_body: adyenplatform::AdyenplatformIncomingWebhook = request
++            .body
++            .parse_struct("AdyenplatformIncomingWebhook")
++            .change_context(ConnectorError::ResponseDeserializationFailed)?;
++
++        let error_reason = webhook_body.data.reason.or(webhook_body
++            .data
++            .tracking
++            .and_then(|tracking_data| tracking_data.reason));
++
++        Ok(api_models::webhooks::PayoutWebhookUpdate {
++            error_message: error_reason.clone(),
++            error_code: error_reason,
++        })
++    }
++
+     fn get_webhook_object_reference_id(
+         &self,
+         #[cfg(feature = "payouts")] request: &IncomingWebhookRequestDetails<'_>,
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs b/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
+index a3c6d3779e1..14053608e8d 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
+@@ -689,14 +689,16 @@ pub struct AdyenplatformIncomingWebhookData {
+     pub status: AdyenplatformWebhookStatus,
+     pub reference: String,
+     pub tracking: Option<AdyenplatformTrackingData>,
++    pub reason: Option<String>,
+     pub category: Option<AdyenPayoutMethod>,
+ }
+ 
+ #[derive(Debug, Serialize, Deserialize)]
+ #[serde(rename_all = "camelCase")]
+ pub struct AdyenplatformTrackingData {
+-    status: TrackingStatus,
+-    estimated_arrival_time: Option<String>,
++    pub status: TrackingStatus,
++    pub reason: Option<String>,
++    pub estimated_arrival_time: Option<String>,
+ }
+ 
+ #[derive(Debug, Serialize, Deserialize)]
+diff --git a/crates/hyperswitch_interfaces/src/connector_integration_interface.rs b/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
+index 2fbbb40b862..04883894fe1 100644
+--- a/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
++++ b/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
+@@ -312,6 +312,17 @@ impl IncomingWebhook for ConnectorEnum {
+         }
+     }
+ 
++    #[cfg(feature = "payouts")]
++    fn get_payout_webhook_details(
++        &self,
++        request: &IncomingWebhookRequestDetails<'_>,
++    ) -> CustomResult<api_models::webhooks::PayoutWebhookUpdate, errors::ConnectorError> {
++        match self {
++            Self::Old(connector) => connector.get_payout_webhook_details(request),
++            Self::New(connector) => connector.get_payout_webhook_details(request),
++        }
++    }
++
+     fn get_webhook_event_type(
+         &self,
+         request: &IncomingWebhookRequestDetails<'_>,
+diff --git a/crates/hyperswitch_interfaces/src/webhooks.rs b/crates/hyperswitch_interfaces/src/webhooks.rs
+index 7204330d6d5..933973935eb 100644
+--- a/crates/hyperswitch_interfaces/src/webhooks.rs
++++ b/crates/hyperswitch_interfaces/src/webhooks.rs
+@@ -210,6 +210,18 @@ pub trait IncomingWebhook: ConnectorCommon + Sync {
+         _request: &IncomingWebhookRequestDetails<'_>,
+     ) -> CustomResult<api_models::webhooks::ObjectReferenceId, errors::ConnectorError>;
+ 
++    /// fn get_status_update_object
++    #[cfg(feature = "payouts")]
++    fn get_payout_webhook_details(
++        &self,
++        _request: &IncomingWebhookRequestDetails<'_>,
++    ) -> CustomResult<api_models::webhooks::PayoutWebhookUpdate, errors::ConnectorError> {
++        Ok(api_models::webhooks::PayoutWebhookUpdate {
++            error_code: None,
++            error_message: None,
++        })
++    }
++
+     /// fn get_webhook_event_type
+     fn get_webhook_event_type(
+         &self,
+diff --git a/crates/router/src/core/webhooks/incoming.rs b/crates/router/src/core/webhooks/incoming.rs
+index f03604859fa..4c6cd2873ae 100644
+--- a/crates/router/src/core/webhooks/incoming.rs
++++ b/crates/router/src/core/webhooks/incoming.rs
+@@ -1075,6 +1075,8 @@ async fn process_webhook_business_logic(
+                 webhook_details,
+                 event_type,
+                 source_verified,
++                request_details,
++                connector,
+             ))
+             .await
+             .attach_printable("Incoming webhook flow for payouts failed"),
+@@ -1444,6 +1446,7 @@ async fn payments_incoming_webhook_flow(
+ 
+ #[cfg(feature = "payouts")]
+ #[instrument(skip_all)]
++#[allow(clippy::too_many_arguments)]
+ async fn payouts_incoming_webhook_flow(
+     state: SessionState,
+     merchant_context: domain::MerchantContext,
+@@ -1451,6 +1454,8 @@ async fn payouts_incoming_webhook_flow(
+     webhook_details: api::IncomingWebhookDetails,
+     event_type: webhooks::IncomingWebhookEvent,
+     source_verified: bool,
++    request_details: &IncomingWebhookRequestDetails<'_>,
++    connector: &ConnectorEnum,
+ ) -> CustomResult<WebhookResponseTracker, errors::ApiErrorResponse> {
+     metrics::INCOMING_PAYOUT_WEBHOOK_METRIC.add(1, &[]);
+     if source_verified {
+@@ -1491,17 +1496,38 @@ async fn payouts_incoming_webhook_flow(
+             .change_context(errors::ApiErrorResponse::WebhookResourceNotFound)
+             .attach_printable("Failed to fetch the payout")?;
+ 
+-        let payout_attempt_update = PayoutAttemptUpdate::StatusUpdate {
+-            connector_payout_id: payout_attempt.connector_payout_id.clone(),
+-            status: common_enums::PayoutStatus::foreign_try_from(event_type)
+-                .change_context(errors::ApiErrorResponse::WebhookProcessingFailure)
+-                .attach_printable("failed payout status mapping from event type")?,
+-            error_message: None,
+-            error_code: None,
+-            is_eligible: payout_attempt.is_eligible,
+-            unified_code: None,
+-            unified_message: None,
+-            payout_connector_metadata: payout_attempt.payout_connector_metadata.clone(),
++        let status = common_enums::PayoutStatus::foreign_try_from(event_type)
++            .change_context(errors::ApiErrorResponse::WebhookProcessingFailure)
++            .attach_printable("failed payout status mapping from event type")?;
++
++        let payout_webhook_details = connector
++            .get_payout_webhook_details(request_details)
++            .switch()
++            .attach_printable("Failed to get error object for payouts")?;
++
++        // if status is failure then update the error_code and error_message as well
++        let payout_attempt_update = if status.is_payout_failure() {
++            PayoutAttemptUpdate::StatusUpdate {
++                connector_payout_id: payout_attempt.connector_payout_id.clone(),
++                status,
++                error_message: payout_webhook_details.error_message,
++                error_code: payout_webhook_details.error_code,
++                is_eligible: payout_attempt.is_eligible,
++                unified_code: None,
++                unified_message: None,
++                payout_connector_metadata: payout_attempt.payout_connector_metadata.clone(),
++            }
++        } else {
++            PayoutAttemptUpdate::StatusUpdate {
++                connector_payout_id: payout_attempt.connector_payout_id.clone(),
++                status,
++                error_message: None,
++                error_code: None,
++                is_eligible: payout_attempt.is_eligible,
++                unified_code: None,
++                unified_message: None,
++                payout_connector_metadata: payout_attempt.payout_connector_metadata.clone(),
++            }
+         };
+ 
+         let action_req =

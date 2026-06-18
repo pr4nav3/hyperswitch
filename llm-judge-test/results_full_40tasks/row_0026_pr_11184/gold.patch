@@ -1,0 +1,385 @@
+From d1f29302631d5abf02e7c0d7e3a455a72c13b3c4 Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Sat, 7 Feb 2026 00:02:48 +0530
+Subject: [PATCH 1/6] fix(sofort): add sofort support in ucs
+
+---
+ crates/router/src/core/unified_connector_service.rs | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/crates/router/src/core/unified_connector_service.rs b/crates/router/src/core/unified_connector_service.rs
+index 23f0870d5a2..5bae7956112 100644
+--- a/crates/router/src/core/unified_connector_service.rs
++++ b/crates/router/src/core/unified_connector_service.rs
+@@ -780,6 +780,17 @@ pub fn build_unified_connector_service_payment_method(
+                     payment_method: Some(PaymentMethod::Eps(eps)),
+                 })
+             }
++            hyperswitch_domain_models::payment_method_data::BankRedirectData::Sofort { country, preferred_language } => {
++                let sofort = payments_grpc::Sofort {
++                    country: country.and_then(|c| payments_grpc::CountryAlpha2::from_str_name(&c.to_string()))
++                    .map(|country| country.into()),
++                    preferred_language: preferred_language
++                };
++
++                Ok(payments_grpc::PaymentMethod {
++                    payment_method: Some(PaymentMethod::Sofort(sofort)),
++                })
++            }
+             hyperswitch_domain_models::payment_method_data::BankRedirectData::Przelewy24 { bank_name } => {
+                 let p24 = payments_grpc::Przelewy24 {
+                     bank_name: bank_name.map(payments_grpc::BankNames::foreign_try_from)
+
+From b3ba18775fd2fa4aacccfd6c2147d94926207d61 Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Sat, 7 Feb 2026 00:06:01 +0530
+Subject: [PATCH 2/6] chore: lints
+
+---
+ crates/router/src/core/unified_connector_service.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/router/src/core/unified_connector_service.rs b/crates/router/src/core/unified_connector_service.rs
+index 5bae7956112..91f4c5789a8 100644
+--- a/crates/router/src/core/unified_connector_service.rs
++++ b/crates/router/src/core/unified_connector_service.rs
+@@ -784,7 +784,7 @@ pub fn build_unified_connector_service_payment_method(
+                 let sofort = payments_grpc::Sofort {
+                     country: country.and_then(|c| payments_grpc::CountryAlpha2::from_str_name(&c.to_string()))
+                     .map(|country| country.into()),
+-                    preferred_language: preferred_language
++                    preferred_language,
+                 };
+ 
+                 Ok(payments_grpc::PaymentMethod {
+
+From 344b8a1b8d406db166b87fff69346d3a1143470c Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Mon, 9 Feb 2026 15:46:35 +0530
+Subject: [PATCH 3/6] chore: bump ucs to commit:
+ `0c0418526daa56bcdd588d010229793834db57cd`
+
+---
+ Cargo.lock                                           | 12 ++++++------
+ crates/external_services/Cargo.toml                  |  2 +-
+ crates/hyperswitch_interfaces/Cargo.toml             |  2 +-
+ crates/router/Cargo.toml                             |  4 ++--
+ .../core/unified_connector_service/transformers.rs   |  3 +++
+ 5 files changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/Cargo.lock b/Cargo.lock
+index 317e1084cdd..1ffa0bfb149 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2130,7 +2130,7 @@ dependencies = [
+ [[package]]
+ name = "config_patch_derive"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0#d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "proc-macro2",
+  "quote",
+@@ -3801,7 +3801,7 @@ dependencies = [
+ [[package]]
+ name = "grpc-api-types"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0#d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "axum 0.8.4",
+  "error-stack 0.5.0",
+@@ -7474,7 +7474,7 @@ dependencies = [
+ [[package]]
+ name = "rust-grpc-client"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0#d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "grpc-api-types",
+ ]
+@@ -10264,7 +10264,7 @@ checksum = "ed646292ffc8188ef8ea4d1e0e0150fb15a5c2e12ad9b8fc191ae7a8a7f3c4b9"
+ [[package]]
+ name = "ucs_cards"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0#d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "bytes 1.10.1",
+  "error-stack 0.4.1",
+@@ -10280,7 +10280,7 @@ dependencies = [
+ [[package]]
+ name = "ucs_common_enums"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0#d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "serde",
+  "strum 0.26.3",
+@@ -10291,7 +10291,7 @@ dependencies = [
+ [[package]]
+ name = "ucs_common_utils"
+ version = "0.1.0"
+-source = "git+https://github.com/juspay/connector-service?rev=d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0#d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0"
++source = "git+https://github.com/juspay/connector-service?rev=0c0418526daa56bcdd588d010229793834db57cd#0c0418526daa56bcdd588d010229793834db57cd"
+ dependencies = [
+  "anyhow",
+  "base64 0.21.7",
+diff --git a/crates/external_services/Cargo.toml b/crates/external_services/Cargo.toml
+index 39e741270d3..bfd6b219566 100644
+--- a/crates/external_services/Cargo.toml
++++ b/crates/external_services/Cargo.toml
+@@ -69,7 +69,7 @@ reqwest = { version = "0.11.27", features = ["rustls-tls"] }
+ http = "0.2.12"
+ url = { version = "2.5.4", features = ["serde"] }
+ quick-xml = { version = "0.31.0", features = ["serialize"] }
+-unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0", package = "rust-grpc-client" }
++unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "rust-grpc-client" }
+ open-feature = { version = "0.2.5", optional = true }
+ superposition_provider = { version = "0.88.1", optional = true }
+ 
+diff --git a/crates/hyperswitch_interfaces/Cargo.toml b/crates/hyperswitch_interfaces/Cargo.toml
+index 4a85ddb5882..33b67eb0970 100644
+--- a/crates/hyperswitch_interfaces/Cargo.toml
++++ b/crates/hyperswitch_interfaces/Cargo.toml
+@@ -30,7 +30,7 @@ strum = { version = "0.26", features = ["derive"] }
+ thiserror = "1.0.69"
+ time = "0.3.41"
+ url = { version = "2.5.4", features = ["serde"] }
+-unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0", package = "rust-grpc-client" }
++unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "rust-grpc-client" }
+ unified-connector-service-masking = { git = "https://github.com/juspay/hyperswitch", tag = "2025.11.24.0", package = "masking" }
+ tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
+ 
+diff --git a/crates/router/Cargo.toml b/crates/router/Cargo.toml
+index 8f35aac7238..d94f37fc142 100644
+--- a/crates/router/Cargo.toml
++++ b/crates/router/Cargo.toml
+@@ -88,8 +88,8 @@ reqwest = { version = "0.11.27", features = ["json", "rustls-tls", "gzip", "mult
+ ring = "0.17.14"
+ rust_decimal = { version = "1.37.1", features = ["serde-with-float", "serde-with-str"] }
+ rust-i18n = { git = "https://github.com/kashif-m/rust-i18n", rev = "f2d8096aaaff7a87a847c35a5394c269f75e077a" }
+-unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0", package = "rust-grpc-client" }
+-unified-connector-service-cards = { git = "https://github.com/juspay/connector-service", rev = "d1a28bfe75ac219f7a3e5558c3b60fb67a64a5b0", package = "ucs_cards" }
++unified-connector-service-client = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "rust-grpc-client" }
++unified-connector-service-cards = { git = "https://github.com/juspay/connector-service", rev = "0c0418526daa56bcdd588d010229793834db57cd", package = "ucs_cards" }
+ unified-connector-service-masking = { git = "https://github.com/juspay/hyperswitch", tag = "2025.11.24.0", package = "masking" }
+ rustc-hash = "1.1.0"
+ rustls = "0.22"
+diff --git a/crates/router/src/core/unified_connector_service/transformers.rs b/crates/router/src/core/unified_connector_service/transformers.rs
+index b7df9546efb..643ace0327a 100644
+--- a/crates/router/src/core/unified_connector_service/transformers.rs
++++ b/crates/router/src/core/unified_connector_service/transformers.rs
+@@ -1095,6 +1095,7 @@ impl
+                 .transpose()?,
+             connector_metadata: None,
+             capture_method: capture_method.map(|capture_method| capture_method.into()),
++            description: None,
+         })
+     }
+ }
+@@ -1180,6 +1181,7 @@ impl transformers::ForeignTryFrom<&RouterData<Capture, PaymentsCaptureData, Paym
+                 .map(|s| s.into()),
+             merchant_account_metadata,
+             test_mode: router_data.test_mode,
++            merchant_order_reference_id: None,
+         })
+     }
+ }
+@@ -5521,6 +5523,7 @@ impl transformers::ForeignTryFrom<&RouterData<api::Void, PaymentsCancelData, Pay
+                 .map(|s| s.into()),
+             merchant_account_metadata,
+             test_mode: router_data.test_mode,
++            merchant_order_reference_id: None,
+         })
+     }
+ }
+
+From f2daff094ffa986f7cd32cfa763ee47d2d3e8788 Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Mon, 9 Feb 2026 15:53:59 +0530
+Subject: [PATCH 4/6] trigger tests
+
+
+From 4085b2f74a2af531520a505c77597d969b3c5c84 Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Mon, 9 Feb 2026 16:49:50 +0530
+Subject: [PATCH 5/6] chore: fix errors
+
+---
+ .../unified_connector_service/transformers.rs | 70 +++++++++++--------
+ 1 file changed, 42 insertions(+), 28 deletions(-)
+
+diff --git a/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs b/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs
+index b66df23cbf6..4f9e546ac6c 100644
+--- a/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs
++++ b/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs
+@@ -363,34 +363,48 @@ impl ForeignTryFrom<payments_grpc::AdditionalPaymentMethodConnectorResponse>
+     fn foreign_try_from(
+         value: payments_grpc::AdditionalPaymentMethodConnectorResponse,
+     ) -> Result<Self, Self::Error> {
+-        let card_data = value.card.unwrap_or_default();
+-
+-        Ok(Self::Card {
+-            authentication_data: card_data.authentication_data.and_then(|data| {
+-                serde_json::from_slice(&data)
+-                    .inspect_err(|e| {
+-                        router_env::logger::warn!(
+-                            deserialization_error=?e,
+-                            "Failed to deserialize authentication_data from UCS connector response"
+-                        );
+-                    })
+-                    .ok()
+-            }),
+-            payment_checks: card_data.payment_checks.and_then(|data| {
+-                serde_json::from_slice(&data)
+-                    .inspect_err(|e| {
+-                        router_env::logger::warn!(
+-                            deserialization_error=?e,
+-                            "Failed to deserialize payment_checks from UCS connector response"
+-                        );
+-                    })
+-                    .ok()
+-            }),
+-            card_network: card_data.card_network,
+-            domestic_network: card_data.domestic_network,
+-            // needs to be updated
+-            auth_code: None,
+-        })
++        // Handle the oneof payment_method_data field
++        match value.payment_method_data {
++            Some(payments_grpc::additional_payment_method_connector_response::PaymentMethodData::Card(card_data)) => {
++                Ok(Self::Card {
++                    authentication_data: card_data.authentication_data.and_then(|data| {
++                        serde_json::from_slice(&data)
++                            .inspect_err(|e| {
++                                router_env::logger::warn!(
++                                    deserialization_error=?e,
++                                    "Failed to deserialize authentication_data from UCS connector response"
++                                );
++                            })
++                            .ok()
++                    }),
++                    payment_checks: card_data.payment_checks.and_then(|data| {
++                        serde_json::from_slice(&data)
++                            .inspect_err(|e| {
++                                router_env::logger::warn!(
++                                    deserialization_error=?e,
++                                    "Failed to deserialize payment_checks from UCS connector response"
++                                );
++                            })
++                            .ok()
++                    }),
++                    card_network: card_data.card_network,
++                    domestic_network: card_data.domestic_network,
++                    // needs to be updated
++                    auth_code: None,
++                })
++            }
++            Some(payments_grpc::additional_payment_method_connector_response::PaymentMethodData::Upi(_)) => {
++                Err(error_stack::Report::new(
++                    UnifiedConnectorServiceError::NotImplemented(
++                        "UPI payment method data transformation is not yet implemented".to_string(),
++                    ),
++                ))
++            }
++            None => Err(error_stack::Report::new(
++                UnifiedConnectorServiceError::ResponseDeserializationFailed,
++            )
++            .attach_printable("Unexpected error: payment_method_data is None in UCS connector response")),
++        }
+     }
+ }
+ 
+
+From 28a23b6f5920118df6f553b6a6651db52c2b1f19 Mon Sep 17 00:00:00 2001
+From: PiX <69745008+pixincreate@users.noreply.github.com>
+Date: Tue, 10 Feb 2026 15:38:51 +0530
+Subject: [PATCH 6/6] Revert "chore: fix errors"
+
+This reverts commit 4085b2f74a2af531520a505c77597d969b3c5c84.
+---
+ .../unified_connector_service/transformers.rs | 70 ++++++++-----------
+ 1 file changed, 28 insertions(+), 42 deletions(-)
+
+diff --git a/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs b/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs
+index 4f9e546ac6c..b66df23cbf6 100644
+--- a/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs
++++ b/crates/hyperswitch_interfaces/src/unified_connector_service/transformers.rs
+@@ -363,48 +363,34 @@ impl ForeignTryFrom<payments_grpc::AdditionalPaymentMethodConnectorResponse>
+     fn foreign_try_from(
+         value: payments_grpc::AdditionalPaymentMethodConnectorResponse,
+     ) -> Result<Self, Self::Error> {
+-        // Handle the oneof payment_method_data field
+-        match value.payment_method_data {
+-            Some(payments_grpc::additional_payment_method_connector_response::PaymentMethodData::Card(card_data)) => {
+-                Ok(Self::Card {
+-                    authentication_data: card_data.authentication_data.and_then(|data| {
+-                        serde_json::from_slice(&data)
+-                            .inspect_err(|e| {
+-                                router_env::logger::warn!(
+-                                    deserialization_error=?e,
+-                                    "Failed to deserialize authentication_data from UCS connector response"
+-                                );
+-                            })
+-                            .ok()
+-                    }),
+-                    payment_checks: card_data.payment_checks.and_then(|data| {
+-                        serde_json::from_slice(&data)
+-                            .inspect_err(|e| {
+-                                router_env::logger::warn!(
+-                                    deserialization_error=?e,
+-                                    "Failed to deserialize payment_checks from UCS connector response"
+-                                );
+-                            })
+-                            .ok()
+-                    }),
+-                    card_network: card_data.card_network,
+-                    domestic_network: card_data.domestic_network,
+-                    // needs to be updated
+-                    auth_code: None,
+-                })
+-            }
+-            Some(payments_grpc::additional_payment_method_connector_response::PaymentMethodData::Upi(_)) => {
+-                Err(error_stack::Report::new(
+-                    UnifiedConnectorServiceError::NotImplemented(
+-                        "UPI payment method data transformation is not yet implemented".to_string(),
+-                    ),
+-                ))
+-            }
+-            None => Err(error_stack::Report::new(
+-                UnifiedConnectorServiceError::ResponseDeserializationFailed,
+-            )
+-            .attach_printable("Unexpected error: payment_method_data is None in UCS connector response")),
+-        }
++        let card_data = value.card.unwrap_or_default();
++
++        Ok(Self::Card {
++            authentication_data: card_data.authentication_data.and_then(|data| {
++                serde_json::from_slice(&data)
++                    .inspect_err(|e| {
++                        router_env::logger::warn!(
++                            deserialization_error=?e,
++                            "Failed to deserialize authentication_data from UCS connector response"
++                        );
++                    })
++                    .ok()
++            }),
++            payment_checks: card_data.payment_checks.and_then(|data| {
++                serde_json::from_slice(&data)
++                    .inspect_err(|e| {
++                        router_env::logger::warn!(
++                            deserialization_error=?e,
++                            "Failed to deserialize payment_checks from UCS connector response"
++                        );
++                    })
++                    .ok()
++            }),
++            card_network: card_data.card_network,
++            domestic_network: card_data.domestic_network,
++            // needs to be updated
++            auth_code: None,
++        })
+     }
+ }
+ 

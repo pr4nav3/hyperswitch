@@ -1,0 +1,287 @@
+[
+  {
+    "reasoning": "The agent produced an empty diff with zero changes applied to the codebase. The working tree remains completely clean at the base commit. All three critical bugs described in the task persist unfixed: (1) The Adyen capture request still uses `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`, sending an incorrect capture amount to the processor. (2) The capture response still hardcodes `amount_captured: Some(0)`, which prevents the payment from ever transitioning out of `partially_captured` status because downstream logic sees zero captured amount. (3) The Cypress test configurations still expect `amount_received: 0` for all capture scenarios instead of `null` (updated via webhooks). The compilation check passing is meaningless since it reflects only the unchanged baseline code. No task requirements were addressed whatsoever.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 5.0,
+    "hygiene": 5.0,
+    "overall": 1.75,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture request sends incorrect amount: uses `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`",
+        "evidence": "Line ~4935: `value: item.amount.to_owned(),`"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture response hardcodes `amount_captured: Some(0)`, preventing succeeded status transition",
+        "evidence": "Line ~4987: `amount_captured: Some(0),`"
+      },
+      {
+        "file": "cypress-tests/cypress/e2e/configs/Payment/Adyen.js",
+        "issue": "Test expectations incorrectly assert `amount_received: 0` for capture scenarios",
+        "evidence": "Lines ~210, ~224, ~238: `amount_received: 0` in full_capture, over_capture, and partial_capture configs"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Fix capture request to use `minor_amount_to_capture` from router data request",
+        "evidence": "transformers.rs still uses `item.amount.to_owned()`"
+      },
+      {
+        "requirement": "Set `amount_captured: None` in capture response (updated by webhooks)",
+        "evidence": "transformers.rs still hardcodes `Some(0)`"
+      },
+      {
+        "requirement": "Update cypress test expectations for capture amount_received values",
+        "evidence": "Adyen.js still expects `0` instead of `null`"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  },
+  {
+    "reasoning": "The agent produced an empty patch with zero file modifications. The working tree remains completely clean at HEAD (d6bbdde18c). Consequently, all three task requirements are entirely unaddressed. First, the Adyen capture request in transformers.rs continues to use `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`, meaning the wrong amount is sent to the processor. Second, the capture response handler still hardcodes `amount_captured: Some(0)`, which prevents the downstream state machine from recognizing a full capture and transitioning the payment to `succeeded`. Third, the Cypress test configurations still expect `amount_received: 0` for all capture scenarios instead of `null` (since Adyen updates the captured amount via webhooks). Because no code was written, there are no new convention violations or hygiene issues to penalize, but the absence of any implementation means correctness and completeness are fully failed.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 0.0,
+    "hygiene": 0.0,
+    "overall": 0.0,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture request sends incorrect amount to Adyen",
+        "evidence": "Line 4935: `value: item.amount.to_owned(),` — should use `item.router_data.request.minor_amount_to_capture`"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture response hardcodes amount_captured to 0, breaking full-capture status transition",
+        "evidence": "Line 4987: `amount_captured: Some(0),` — should be `None` with a webhook update comment"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Use minor_amount_to_capture for Adyen capture request amount payload",
+        "evidence": "No changes applied to AdyenCaptureRequest TryFrom impl"
+      },
+      {
+        "requirement": "Set amount_captured to None in capture response for webhook-driven updates",
+        "evidence": "No changes applied to PaymentsCaptureResponseRouterData TryFrom impl"
+      },
+      {
+        "requirement": "Update Cypress test expectations for Adyen capture scenarios to amount_received: null",
+        "evidence": "No changes applied to cypress-tests/cypress/e2e/configs/Payment/Adyen.js"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  },
+  {
+    "reasoning": "The agent produced an entirely empty diff and made zero modifications to the codebase. The working tree is completely clean, confirming that none of the three core issues were addressed: (1) the capture request still incorrectly uses `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`, (2) the capture response still hardcodes `amount_captured: Some(0)` instead of `None`, and (3) the Cypress test expectations remain at `amount_received: 0` instead of `null`. Because no code was written, correctness and completeness are both 0. There are no code-level convention violations or hygiene issues to penalize since the diff is empty, but the heavy weighting on correctness (35%) and completeness (30%) yields a low overall score. The rustfmt failure is environmental (missing `cargo fmt` binary), not agent-caused.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Use minor_amount_to_capture for Adyen capture request amount payload",
+        "evidence": "Line 4935 still reads `value: item.amount.to_owned(),` instead of `item.router_data.request.minor_amount_to_capture`"
+      },
+      {
+        "requirement": "Set amount_captured to None in capture response for webhook update",
+        "evidence": "Line 4987 still hardcodes `amount_captured: Some(0),` instead of `None` with webhook comment"
+      },
+      {
+        "requirement": "Update Cypress Adyen capture test expectations to amount_received: null",
+        "evidence": "Adyen.js lines 210, 224, 238 still expect `amount_received: 0` instead of `null`"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  },
+  {
+    "reasoning": "The agent produced an entirely empty patch: no files were modified, added, or deleted. Correctness falls into the 0–1 band because an empty diff is explicitly listed as the lowest tier, and all three core logic defects remain exactly as they were. The capture request still uses item.amount.to_owned() instead of item.router_data.request.minor_amount_to_capture, so Adyen receives the wrong amount. The response handler still hardcodes amount_captured: Some(0), which blocks the payment from transitioning to succeeded after a full capture. Completeness is 0 because zero of the three deliverables were addressed—neither the capture request fix, the capture response fix, nor the Cypress expectation updates were touched. Convention adherence is scored 10 because the agent introduced no new code and therefore no new violations such as unwrap/expect/panic, bad imports, or unsafe blocks; the dimension is vacuously clean. Hygiene is also 10 because there are no extraneous files, whitespace churn, or unrelated changes in an empty patch. The rustfmt failure is environmental (missing cargo fmt command) and unrelated to the agent’s nonexistent changes.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture request sends wrong amount to Adyen by using item.amount instead of item.router_data.request.minor_amount_to_capture",
+        "evidence": "value: item.amount.to_owned(),"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture response hardcodes amount_captured to Some(0), preventing the payment from transitioning to succeeded after full capture",
+        "evidence": "amount_captured: Some(0),"
+      },
+      {
+        "file": "cypress-tests/cypress/e2e/configs/Payment/Adyen.js",
+        "issue": "Cypress expectations incorrectly assert amount_received: 0 for all capture scenarios instead of null",
+        "evidence": "amount_received: 0,"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Fix capture request to use minor_amount_to_capture for the correct capture amount payload",
+        "evidence": "No changes applied; line retains item.amount.to_owned()"
+      },
+      {
+        "requirement": "Fix capture response to leave amount_captured as None so webhooks update it correctly",
+        "evidence": "No changes applied; line retains Some(0)"
+      },
+      {
+        "requirement": "Update Cypress test configs to expect amount_received: null for capture scenarios",
+        "evidence": "No changes applied; expectations remain at 0"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  },
+  {
+    "reasoning": "The agent produced an empty patch with zero code changes. Working tree is completely clean (confirmed by git status). All three task requirements remain unaddressed: (1) The capture request at transformers.rs:4935 still uses `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`, meaning the wrong amount is sent to Adyen. (2) The capture response at transformers.rs:4987 still hardcodes `amount_captured: Some(0)`, which prevents full captures from transitioning to `succeeded` status. (3) Cypress test expectations in Adyen.js still show `amount_received: 0` for all capture scenarios instead of `null` (updated by webhooks). The cargo check passed only because no changes were applied (baseline compilation). The rustfmt failure is environmental (missing cargo-fmt), not agent-caused. Since no files were modified, no requirements were met, and the core bugs persist exactly as described in the task.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 0.0,
+    "hygiene": 0.0,
+    "overall": 0.0,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture request sends incorrect amount: uses `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`",
+        "evidence": "Line 4935: `value: item.amount.to_owned(),`"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture response hardcodes `amount_captured: Some(0)` preventing succeeded status transition on full capture",
+        "evidence": "Line 4987: `amount_captured: Some(0),`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Fix capture request amount payload to use minor_amount_to_capture",
+        "evidence": "transformers.rs:4935 unchanged, still uses item.amount.to_owned()"
+      },
+      {
+        "requirement": "Fix capture response amount_captured handling (should be None for webhook update)",
+        "evidence": "transformers.rs:4987 unchanged, still hardcoded to Some(0)"
+      },
+      {
+        "requirement": "Update cypress test expectations for capture scenarios",
+        "evidence": "Adyen.js:210,224,238 unchanged, still expect amount_received: 0"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  },
+  {
+    "reasoning": "The agent produced an entirely empty diff. Verification via git status confirms the working tree is clean with no modifications. The three critical issues described in the task remain completely unaddressed: (1) the capture request at line 4935 still uses `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`, causing incorrect capture amounts to be sent to Adyen; (2) the capture response handler at line 4987 still hardcodes `amount_captured: Some(0)`, which prevents full captures from transitioning to `succeeded` and leaves them stuck in `partially_captured`; and (3) the Cypress test configurations at lines 210, 224, and 238 still expect `amount_received: 0` rather than `null` to reflect webhook-driven updates. Because no code was touched, there are no newly introduced convention violations or hygiene issues, but the complete absence of any fix makes this a total failure against the stated requirements.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture request sends wrong amount: uses item.amount.to_owned() instead of item.router_data.request.minor_amount_to_capture",
+        "evidence": "Line 4935: `value: item.amount.to_owned(),`"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture response hardcodes amount_captured to Some(0), blocking succeeded transition for full captures",
+        "evidence": "Line 4987: `amount_captured: Some(0),`"
+      },
+      {
+        "file": "cypress-tests/cypress/e2e/configs/Payment/Adyen.js",
+        "issue": "Cypress expectations still assert amount_received: 0 instead of null for capture scenarios",
+        "evidence": "Lines 210, 224, 238: `amount_received: 0`"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Fix capture request amount to use minor_amount_to_capture from router data",
+        "evidence": "Line 4935 unchanged from buggy item.amount.to_owned()"
+      },
+      {
+        "requirement": "Fix capture response to not hardcode amount_captured (set to None for webhook update)",
+        "evidence": "Line 4987 unchanged from Some(0)"
+      },
+      {
+        "requirement": "Update Cypress test expectations for amount_received to null",
+        "evidence": "Lines 210, 224, 238 unchanged from 0"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  },
+  {
+    "type": "step_start",
+    "timestamp": 1781718948036,
+    "sessionID": "ses_129477633ffeZ3Ek3N7oHi6yjg",
+    "part": {
+      "id": "prt_ed6b998a400176lqSDyHJe1Tzg",
+      "messageID": "msg_ed6b88b7d00158jm1B55ih7zxN",
+      "sessionID": "ses_129477633ffeZ3Ek3N7oHi6yjg",
+      "snapshot": "166f99be01d43963c22c8bced17af70546f86c35",
+      "type": "step-start"
+    },
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent produced an empty patch—no files were modified. The three required fixes remain entirely unaddressed: (1) the capture request still uses `item.amount.to_owned()` instead of `item.router_data.request.minor_amount_to_capture`, (2) the capture response still hardcodes `amount_captured: Some(0)` instead of `None` (to be updated by webhooks), and (3) the Cypress test expectations still show `amount_received: 0` instead of `null`. Since no changes were applied, correctness and completeness are both at the minimum. Convention adherence and hygiene are unaffected because no code was written.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture request uses item.amount.to_owned() instead of item.router_data.request.minor_amount_to_capture",
+        "evidence": "Line 4935: value: item.amount.to_owned(),"
+      },
+      {
+        "file": "crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs",
+        "issue": "Capture response hardcodes amount_captured: Some(0) preventing succeeded status on full capture",
+        "evidence": "Line 4987: amount_captured: Some(0),"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Use minor_amount_to_capture for capture request amount",
+        "evidence": "transformers.rs line 4935 unchanged"
+      },
+      {
+        "requirement": "Set amount_captured to None (updated by webhooks)",
+        "evidence": "transformers.rs line 4987 unchanged"
+      },
+      {
+        "requirement": "Update Cypress test expectations for amount_received",
+        "evidence": "Adyen.js lines 210, 224, 238 still expect 0"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  }
+]

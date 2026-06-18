@@ -1,0 +1,9 @@
+{
+  "verdict": "pass",
+  "confidence": "high",
+  "issues_found": [],
+  "corrected_assessment": "",
+  "notes": "The agent made no code changes (empty diff). The cargo_check_affected check passed successfully (rc=0). The rustfmt failure is purely environmental ('error: no such command: fmt'), entirely unrelated to any agent modifications. Reviewer's fault attribution as ENVIRONMENTAL is accurate, and their observation that no agent-modified code exists is correct.",
+  "parse_error": false,
+  "returncode": 0
+}

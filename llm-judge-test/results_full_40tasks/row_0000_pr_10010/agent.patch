@@ -1,0 +1,49 @@
+diff --git a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+index 435e34f3f1..5bc1363441 100644
+--- a/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/finix/transformers.rs
+@@ -133,19 +133,33 @@ impl TryFrom<&FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResp
+     fn try_from(
+         item: &FinixRouterData<'_, Authorize, PaymentsAuthorizeData, PaymentsResponseData>,
+     ) -> Result<Self, Self::Error> {
+-        if matches!(
+-            item.router_data.auth_type,
+-            enums::AuthenticationType::ThreeDs
+-        ) {
+-            return Err(ConnectorError::NotImplemented(
+-                get_unimplemented_payment_method_error_message("finix"),
+-            )
+-            .into());
+-        }
+         let source =
+             match item.router_data.request.payment_method_data.clone() {
+-                PaymentMethodData::Card(_)
+-                | PaymentMethodData::Wallet(WalletData::GooglePay(_))
++                PaymentMethodData::Card(_) => {
++                    if matches!(
++                        item.router_data.auth_type,
++                        enums::AuthenticationType::ThreeDs
++                    ) {
++                        return Err(ConnectorError::NotImplemented(
++                            get_unimplemented_payment_method_error_message("finix"),
++                        )
++                        .into());
++                    }
++                    let source = item.router_data.get_payment_method_token()?;
++                    match source {
++                        PaymentMethodToken::Token(token) => token,
++                        PaymentMethodToken::ApplePayDecrypt(_) => Err(
++                            unimplemented_payment_method!("Apple Pay", "Simplified", "finix"),
++                        )?,
++                        PaymentMethodToken::PazeDecrypt(_) => {
++                            Err(unimplemented_payment_method!("Paze", "finix"))?
++                        }
++                        PaymentMethodToken::GooglePayDecrypt(_) => {
++                            Err(unimplemented_payment_method!("Google Pay", "finix"))?
++                        }
++                    }
++                }
++                PaymentMethodData::Wallet(WalletData::GooglePay(_))
+                 | PaymentMethodData::Wallet(WalletData::ApplePay(_)) => {
+                     let source = item.router_data.get_payment_method_token()?;
+                     match source {

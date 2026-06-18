@@ -1,0 +1,452 @@
+[
+  {
+    "reasoning": "The agent submitted an empty diff. No files were modified, meaning none of the task requirements were addressed. The reference patch introduces PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs, updates the PaymentMethodAmountSplit definition, threads payment_method_type and payment_method_subtype through the split-payments pipeline, and passes per-portion values into create_domain_model_for_split_payment. The agent did none of this. The codebase remains in its original broken state where split payment attempts inherit request-level payment method metadata instead of split-specific metadata. Because no code was written, there are no introduced convention violations or hygiene issues, but correctness and completeness are fully failed.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_domain_models/src/payments/split_payments.rs",
+        "issue": "Agent did not introduce PaymentMethodDetails or PaymentMethodDetailsWithSplitAmount structs; left raw tuple (PaymentMethodData, MinorUnit) in place.",
+        "evidence": "pub struct PaymentMethodAmountSplit {\n    pub balance_pm_split: Vec<(PaymentMethodData, MinorUnit)>,\n    pub non_balance_pm_split: Option<(PaymentMethodData, MinorUnit)>,\n}"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations.rs",
+        "issue": "Agent did not update trait signature to accept PaymentMethodDetailsWithSplitAmount.",
+        "evidence": "_split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations/payment_confirm_intent.rs",
+        "issue": "Agent did not modify GetTracker implementation to destructure PaymentMethodDetailsWithSplitAmount or pass per-split payment_method_type and payment_method_subtype.",
+        "evidence": "split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Agent did not update gift-card split construction to embed PaymentMethod and PaymentMethodType, and did not update the loop over remaining_pm_amount_split.",
+        "evidence": "Some(Ok((PaymentMethodData::GiftCard(Box::new(gift_card_card.to_owned())), amount_to_use)))"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Agent did not update create_domain_model_for_split_payment to accept and use split-specific payment_method_type and payment_method_subtype.",
+        "evidence": "payment_method_type: request.payment_method_type,\npayment_method_subtype: request.payment_method_subtype,"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Introduce PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs in split_payments.rs.",
+        "evidence": "No changes to split_payments.rs."
+      },
+      {
+        "requirement": "Update PaymentMethodAmountSplit to use PaymentMethodDetailsWithSplitAmount instead of raw tuples.",
+        "evidence": "Struct fields remain Vec<(PaymentMethodData, MinorUnit)> and Option<(PaymentMethodData, MinorUnit)>."
+      },
+      {
+        "requirement": "Thread payment_method_type and payment_method_subtype per split portion through split_payments_execute_core.",
+        "evidence": "No modifications to split_payments.rs."
+      },
+      {
+        "requirement": "Pass per-split payment_method_type and payment_method_subtype into create_domain_model_for_split_payment.",
+        "evidence": "Function signature and body unchanged."
+      },
+      {
+        "requirement": "Update GetTracker trait signature and payment_confirm_intent.rs implementation to use PaymentMethodDetailsWithSplitAmount.",
+        "evidence": "Trait and impl still use old tuple signature."
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  },
+  {
+    "reasoning": "The agent produced an entirely empty patch. No files were modified in the codebase. The reference patch introduces PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs to carry payment_method_type and payment_method_subtype alongside each split payment portion, then threads those per-portion values through the split-payments execution pipeline so that create_domain_model_for_split_payment assigns the correct classification fields. Because the agent changed nothing, all five files remain in their base-commit state: split_payments.rs still uses raw (PaymentMethodData, MinorUnit) tuples; operations.rs still defines the trait GetTracker signature with the old tuple; payment_confirm_intent.rs still extracts only .0 and .1 from the tuple; split_payments.rs still builds tuples and loops over (pm_data, amount); and create_domain_model_for_split_payment still pulls payment_method_type and payment_method_subtype from the top-level request instead of from each split portion. Therefore the core bug persists entirely unaddressed. Compilation was unaffected because no code was touched; the rustfmt failure is an environmental tooling absence.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_domain_models/src/payments/split_payments.rs",
+        "issue": "Missing PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs; still uses raw tuple (PaymentMethodData, MinorUnit)",
+        "evidence": "pub struct PaymentMethodAmountSplit {\n    pub balance_pm_split: Vec<(PaymentMethodData, MinorUnit)>,\n    pub non_balance_pm_split: Option<(PaymentMethodData, MinorUnit)>,\n}"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations.rs",
+        "issue": "Trait GetTracker signature still accepts old tuple instead of PaymentMethodDetailsWithSplitAmount",
+        "evidence": "_split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations/payment_confirm_intent.rs",
+        "issue": "Still destructures tuple and passes split_amount_data.1 / split_amount_data.0; does not extract per-portion payment_method_type and payment_method_subtype",
+        "evidence": "split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)\n...\ncreate_domain_model_for_split_payment(..., split_amount_data.1, attempts_group_id)"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Still builds tuples for gift-card splits and non-gift-card split; does not embed PaymentMethod / PaymentMethodType; loop still destructures tuple",
+        "evidence": "Some(Ok((PaymentMethodData::GiftCard(...), amount_to_use)))\n...\nnon_balance_pm_split: Some((non_gift_card_pm_data, remaining_to_allocate))\n...\nfor (payment_method_data, amount) in remaining_pm_amount_split"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "create_domain_model_for_split_payment still takes payment method type/subtype from request instead of split-specific values",
+        "evidence": "payment_method_type: request.payment_method_type,\npayment_method_subtype: request.payment_method_subtype,"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Define PaymentMethodDetails struct to hold payment_method_data, payment_method_type, and payment_method_subtype",
+        "evidence": "File split_payments.rs unmodified; no new struct present"
+      },
+      {
+        "requirement": "Define PaymentMethodDetailsWithSplitAmount struct replacing raw tuple",
+        "evidence": "File split_payments.rs unmodified; no new struct present"
+      },
+      {
+        "requirement": "Update PaymentMethodAmountSplit to use PaymentMethodDetailsWithSplitAmount",
+        "evidence": "balance_pm_split and non_balance_pm_split still typed as tuple variants"
+      },
+      {
+        "requirement": "Thread per-split payment_method_type and payment_method_subtype into create_domain_model_for_split_payment",
+        "evidence": "create_domain_model_for_split_payment signature unchanged; still uses request.payment_method_type / request.payment_method_subtype"
+      },
+      {
+        "requirement": "Populate PaymentMethod and PaymentMethodType from each gift card and non-gift card split portion",
+        "evidence": "Gift card split still produces raw (PaymentMethodData, MinorUnit); non-gift card split still produces raw tuple"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  },
+  {
+    "reasoning": "The agent produced an empty patch. No files were modified. The task requires propagating payment method type and subtype metadata through the split payments pipeline by introducing PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs, updating trait signatures, threading per-portion metadata through split_payments.rs, and updating create_domain_model_for_split_payment. None of this was done. The base code compiles (cargo_check_affected passed), but the underlying bug remains completely unfixed. Correctness and completeness are zero because there is no agent-authored logic to evaluate—the diff is literally empty. Convention adherence and hygiene are neutral because no changes means no new violations or churn were introduced, but this does not offset the total failure to implement the required fix.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Introduce PaymentMethodDetails struct with payment_method_data, payment_method_type, and payment_method_subtype fields",
+        "evidence": "No changes made to split_payments.rs; base code still uses raw (PaymentMethodData, MinorUnit) tuples"
+      },
+      {
+        "requirement": "Introduce PaymentMethodDetailsWithSplitAmount struct wrapping PaymentMethodDetails and split amount",
+        "evidence": "Agent patch is empty; reference patch adds PaymentMethodDetailsWithSplitAmount which is absent in base"
+      },
+      {
+        "requirement": "Update PaymentMethodAmountSplit to use PaymentMethodDetailsWithSplitAmount instead of tuples",
+        "evidence": "Base code balance_pm_split and non_balance_pm_split still use Vec<(PaymentMethodData, MinorUnit)> and Option<(PaymentMethodData, MinorUnit)>"
+      },
+      {
+        "requirement": "Update GetTracker split-payment signature to accept PaymentMethodDetailsWithSplitAmount",
+        "evidence": "operations.rs still declares _split_amount_data as (PaymentMethodData, MinorUnit)"
+      },
+      {
+        "requirement": "Thread per-portion payment_method_type and payment_method_subtype into create_domain_model_for_split_payment",
+        "evidence": "split_payments.rs create_domain_model_for_split_payment still reads payment_method_type and payment_method_subtype from request instead of split-specific values"
+      },
+      {
+        "requirement": "Populate split attempt records with gift-card vs card distinction based on each split portion",
+        "evidence": "No logic added to derive PaymentMethod::GiftCard and corresponding subtype for gift-card portions; no logic to carry non-gift-card PM type/subtype"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  },
+  {
+    "reasoning": "The agent produced an entirely empty diff. No files were modified. The core requirement—to propagate payment method type and subtype metadata into each split payment attempt—was completely unaddressed. Every structural change in the reference patch is absent: the PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs were not introduced, tuple-based (PaymentMethodData, MinorUnit) signatures remain throughout the pipeline, and create_domain_model_for_split_payment still sources payment_method_type and payment_method_subtype from the request object instead of the per-split payment data. The prior review assessment confirms all examined files are in their original base-commit state. Cargo check passed only because nothing was changed; the rustfmt failure is purely environmental (missing cargo-fmt). With zero code produced, there are no new convention or hygiene violations to penalize, but correctness and completeness bottom out.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_domain_models/src/payments/split_payments.rs",
+        "issue": "Missing PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs; still uses raw tuple",
+        "evidence": "pub struct PaymentMethodAmountSplit {\n    pub balance_pm_split: Vec<(PaymentMethodData, MinorUnit)>,\n    pub non_balance_pm_split: Option<(PaymentMethodData, MinorUnit)>,\n}"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations.rs",
+        "issue": "Trait signature still accepts old tuple instead of per-split payment method metadata",
+        "evidence": "_split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations/payment_confirm_intent.rs",
+        "issue": "Still destructures tuple and passes request-level payment method type/subtype",
+        "evidence": "split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)\n...\ncreate_domain_model_for_split_payment(..., split_amount_data.1, attempts_group_id)"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Still builds tuples for gift-card and non-gift-card splits without embedding PaymentMethod/PaymentMethodType",
+        "evidence": "Some(Ok((PaymentMethodData::GiftCard(...), amount_to_use)))\n...\nnon_balance_pm_split: Some((non_gift_card_pm_data, remaining_to_allocate))"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Loop destructures tuple instead of PaymentMethodDetailsWithSplitAmount",
+        "evidence": "for (payment_method_data, amount) in remaining_pm_amount_split"
+      },
+      {
+        "file": "crates/router/src/types/domain.rs",
+        "issue": "Missing re-export of split_payments module under v2 feature",
+        "evidence": "No split_payments re-export present in domain.rs"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Introduce PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs",
+        "evidence": "No new structs added to split_payments.rs"
+      },
+      {
+        "requirement": "Replace tuple signatures with PaymentMethodDetailsWithSplitAmount across the split payments pipeline",
+        "evidence": "operations.rs, payment_confirm_intent.rs, and split_payments.rs still use old tuples"
+      },
+      {
+        "requirement": "Populate per-split payment_method_type and payment_method_subtype in payment attempt records",
+        "evidence": "create_domain_model_for_split_payment still uses request.payment_method_type/request.payment_method_subtype"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  },
+  {
+    "reasoning": "The agent produced an empty diff and modified no files. Every file referenced in the task—split_payments.rs, operations.rs, payment_confirm_intent.rs, the core split_payments.rs, and domain.rs—remains in its original base-commit state. Consequently, the v2 split-payments bug remains completely unfixed: PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs were not introduced, tuple-based (PaymentMethodData, MinorUnit) signatures persist throughout the pipeline, and create_domain_model_for_split_payment still pulls payment_method_type and payment_method_subtype from the top-level request rather than from each split portion.\n\nBecause no code was written, correctness and completeness are both at the lowest band. The core logic change—threading per-portion payment method metadata through the split-payments flow—was not implemented at all, so the resulting behavior is identical to the buggy baseline. All task requirements, including struct creation, signature updates, and metadata propagation into domain-model construction, are wholly absent.\n\nCompilation was unaffected by the agent (cargo_check_affected passed), confirming the absence of syntax or type errors in the non-existent patch. The rustfmt failure is environmental and unrelated to the agent's work.\n\nConvention adherence and hygiene receive maximum scores solely because the agent introduced zero lines of code. There are no unwrap/expect/panic/dbg/todo/unsafe additions, no bad imports, no numeric casts, no hardcoded constants, and no formatting or whitespace churn. Hygiene is pristine by virtue of there being no changed files, temp files, or unrelated modifications.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [],
+    "missing_requirements": [
+      {
+        "requirement": "Introduce PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs",
+        "evidence": "split_payments.rs still uses raw tuples (PaymentMethodData, MinorUnit) and lacks the new structs"
+      },
+      {
+        "requirement": "Update PaymentMethodAmountSplit to use PaymentMethodDetailsWithSplitAmount instead of tuples",
+        "evidence": "balance_pm_split and non_balance_pm_split still typed as Vec<(PaymentMethodData, MinorUnit)> and Option<(PaymentMethodData, MinorUnit)>"
+      },
+      {
+        "requirement": "Update GetTracker trait signature to accept PaymentMethodDetailsWithSplitAmount",
+        "evidence": "operations.rs still declares _split_amount_data as (PaymentMethodData, MinorUnit)"
+      },
+      {
+        "requirement": "Thread per-split payment_method_type and payment_method_subtype through payment_confirm_intent",
+        "evidence": "payment_confirm_intent.rs still destructures the old tuple and passes split_amount_data.1 / split_amount_data.0"
+      },
+      {
+        "requirement": "Thread per-split payment_method_type and payment_method_subtype through split_payments_execute_core",
+        "evidence": "core split_payments.rs still builds tuples for gift-card and non-gift-card splits without embedding PaymentMethod/PaymentMethodType"
+      },
+      {
+        "requirement": "Update create_domain_model_for_split_payment to accept split-specific payment_method_type and payment_method_subtype",
+        "evidence": "create_domain_model_for_split_payment lacks the two new parameters and still assigns request.payment_method_type and request.payment_method_subtype"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  },
+  {
+    "reasoning": "The agent produced an entirely empty diff: no files were modified. All five files identified in the reference patch remain in their original base-commit state. The code still uses the old tuple-based (PaymentMethodData, MinorUnit) signatures in PaymentMethodAmountSplit, still passes raw tuples through get_trackers_for_split_payments, and still assigns request.payment_method_type / request.payment_method_subtype in create_domain_model_for_split_payment rather than deriving them from each split payment portion. Because nothing was changed, zero task requirements were addressed and the core logic remains opposite of what the task requires. Convention adherence and hygiene are effectively perfect because there is no new code to violate anything, but correctness and completeness are both at the minimum.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_domain_models/src/payments/split_payments.rs",
+        "issue": "Still uses raw tuple (PaymentMethodData, MinorUnit); missing PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs",
+        "evidence": "pub struct PaymentMethodAmountSplit {\n    pub balance_pm_split: Vec<(PaymentMethodData, MinorUnit)>,\n    pub non_balance_pm_split: Option<(PaymentMethodData, MinorUnit)>,\n}"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations.rs",
+        "issue": "Trait signature still accepts old tuple instead of PaymentMethodDetailsWithSplitAmount",
+        "evidence": "_split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations/payment_confirm_intent.rs",
+        "issue": "Still destructures tuple and does not extract per-portion payment_method_type and payment_method_subtype",
+        "evidence": "split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)\n...\ncreate_domain_model_for_split_payment(..., split_amount_data.1, attempts_group_id)"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Still builds tuples for gift-card splits and non-gift-card split; does not embed PaymentMethod / PaymentMethodType per portion",
+        "evidence": "Some(Ok((PaymentMethodData::GiftCard(...), amount_to_use)))\n...\nnon_balance_pm_split: Some((non_gift_card_pm_data, remaining_to_allocate))"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Loop destructures tuple instead of PaymentMethodDetailsWithSplitAmount",
+        "evidence": "for (payment_method_data, amount) in remaining_pm_amount_split"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "create_domain_model_for_split_payment still takes payment method type/subtype from request instead of split-specific values",
+        "evidence": "payment_method_type: request.payment_method_type,\npayment_method_subtype: request.payment_method_subtype,"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Define PaymentMethodDetails struct carrying payment_method_data, payment_method_type, and payment_method_subtype",
+        "evidence": "File split_payments.rs has no such struct"
+      },
+      {
+        "requirement": "Define PaymentMethodDetailsWithSplitAmount struct wrapping PaymentMethodDetails and split_amount",
+        "evidence": "File split_payments.rs has no such struct"
+      },
+      {
+        "requirement": "Rewrite PaymentMethodAmountSplit to use PaymentMethodDetailsWithSplitAmount instead of raw tuples",
+        "evidence": "Fields still typed as Vec<(PaymentMethodData, MinorUnit)> and Option<(PaymentMethodData, MinorUnit)>"
+      },
+      {
+        "requirement": "Update get_trackers_for_split_payments trait signature to accept PaymentMethodDetailsWithSplitAmount",
+        "evidence": "Signature still accepts (PaymentMethodData, MinorUnit) tuple"
+      },
+      {
+        "requirement": "Thread per-split payment_method_type and payment_method_subtype into create_domain_model_for_split_payment",
+        "evidence": "Function signature unchanged; still derives values from request"
+      },
+      {
+        "requirement": "Populate payment_method_type and payment_method_subtype from each split portion in create_domain_model_for_split_payment",
+        "evidence": "Lines still read request.payment_method_type and request.payment_method_subtype"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent produced an empty patch and modified no files. The base code still uses raw tuples (PaymentMethodData, MinorUnit) in PaymentMethodAmountSplit, still carries payment method classification only at the request level, and still assigns request.payment_method_type and request.payment_method_subtype inside create_domain_model_for_split_payment rather than per-split values. This means gift-card portions and non-gift-card portions cannot be distinguished in the resulting attempt records, leaving the reported bug entirely unfixed. Since zero lines were changed, there are no introduced convention violations, no extraneous file edits, and no agent-caused compilation errors. Nevertheless, the task requirements—adding PaymentMethodDetails/PaymentMethodDetailsWithSplitAmount structs, rewriting the split-payments pipeline to carry type/subtype per portion, and wiring those values into attempt creation—are completely absent. Therefore correctness and completeness are at the minimum, while hygiene and convention adherence are unaffected.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_domain_models/src/payments/split_payments.rs",
+        "issue": "Missing PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs; still uses raw tuple",
+        "evidence": "pub struct PaymentMethodAmountSplit {\n    pub balance_pm_split: Vec<(PaymentMethodData, MinorUnit)>,\n    pub non_balance_pm_split: Option<(PaymentMethodData, MinorUnit)>,\n}"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations.rs",
+        "issue": "Trait signature still accepts old tuple instead of PaymentMethodDetailsWithSplitAmount",
+        "evidence": "_split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations/payment_confirm_intent.rs",
+        "issue": "Still destructures tuple and does not extract per-portion payment_method_type/payment_method_subtype",
+        "evidence": "split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)\n...\ncreate_domain_model_for_split_payment(..., split_amount_data.1, attempts_group_id)"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Still builds tuples for splits and derives type/subtype from request in create_domain_model_for_split_payment",
+        "evidence": "Some(Ok((PaymentMethodData::GiftCard(...), amount_to_use)))\n...\npayment_method_type: request.payment_method_type,\npayment_method_subtype: request.payment_method_subtype,"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Introduce PaymentMethodDetails struct holding payment_method_data, payment_method_type, and payment_method_subtype",
+        "evidence": "struct does not exist in split_payments.rs"
+      },
+      {
+        "requirement": "Introduce PaymentMethodDetailsWithSplitAmount struct replacing raw tuple",
+        "evidence": "struct does not exist in split_payments.rs"
+      },
+      {
+        "requirement": "Propagate per-split payment_method_type and payment_method_subtype into create_domain_model_for_split_payment instead of request fields",
+        "evidence": "create_domain_model_for_split_payment signature lacks these parameters and still reads request.payment_method_type / request.payment_method_subtype"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  },
+  {
+    "reasoning": "The agent produced an empty diff with zero file modifications. The codebase remains in its original state with all five affected files unchanged. The core bug persists: split payment attempts still use raw tuples (PaymentMethodData, MinorUnit) instead of structured PaymentMethodDetailsWithSplitAmount, and create_domain_model_for_split_payment continues to pull payment_method_type and payment_method_subtype from the top-level request rather than from each split portion. Since no code was written, no requirements were addressed and the functional defect remains completely unfixed. Compilation passes vacuously because nothing was altered. Convention and hygiene scores are neutral because no new code was introduced.",
+    "correctness": 0.0,
+    "completeness": 0.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 3.5,
+    "correctness_bugs": [
+      {
+        "file": "crates/hyperswitch_domain_models/src/payments/split_payments.rs",
+        "issue": "Missing PaymentMethodDetails and PaymentMethodDetailsWithSplitAmount structs; still uses raw tuple (PaymentMethodData, MinorUnit)",
+        "evidence": "pub struct PaymentMethodAmountSplit {\n    pub balance_pm_split: Vec<(PaymentMethodData, MinorUnit)>,\n    pub non_balance_pm_split: Option<(PaymentMethodData, MinorUnit)>,\n}"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations.rs",
+        "issue": "Trait get_trackers_for_split_payments still accepts old tuple instead of PaymentMethodDetailsWithSplitAmount",
+        "evidence": "_split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)"
+      },
+      {
+        "file": "crates/router/src/core/payments/operations/payment_confirm_intent.rs",
+        "issue": "Still destructures tuple and does not extract per-portion payment_method_type and payment_method_subtype",
+        "evidence": "split_amount_data: (\n    api_models::payments::PaymentMethodData,\n    common_utils::types::MinorUnit,\n)\n...\ncreate_domain_model_for_split_payment(..., split_amount_data.1, attempts_group_id)"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Still builds tuples for gift-card splits and non-gift-card split; does not embed PaymentMethod/PaymentMethodType per portion",
+        "evidence": "Some(Ok((PaymentMethodData::GiftCard(...), amount_to_use)))\n...\nnon_balance_pm_split: Some((non_gift_card_pm_data, remaining_to_allocate))"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "Loop destructures tuple instead of PaymentMethodDetailsWithSplitAmount",
+        "evidence": "for (payment_method_data, amount) in remaining_pm_amount_split"
+      },
+      {
+        "file": "crates/router/src/core/split_payments.rs",
+        "issue": "create_domain_model_for_split_payment still takes payment method type/subtype from request instead of split-specific values",
+        "evidence": "payment_method_type: request.payment_method_type,\npayment_method_subtype: request.payment_method_subtype,"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Introduce PaymentMethodDetails struct carrying payment_method_data, payment_method_type, and payment_method_subtype",
+        "evidence": "split_payments.rs still lacks this struct"
+      },
+      {
+        "requirement": "Introduce PaymentMethodDetailsWithSplitAmount struct wrapping PaymentMethodDetails and split_amount",
+        "evidence": "split_payments.rs still lacks this struct"
+      },
+      {
+        "requirement": "Rewrite PaymentMethodAmountSplit to use PaymentMethodDetailsWithSplitAmount instead of raw tuples",
+        "evidence": "Fields still typed as Vec<(PaymentMethodData, MinorUnit)> and Option<(PaymentMethodData, MinorUnit)>"
+      },
+      {
+        "requirement": "Update GetTracker::get_trackers_for_split_payments signature to accept PaymentMethodDetailsWithSplitAmount",
+        "evidence": "Trait still defines _split_amount_data as (PaymentMethodData, MinorUnit) tuple"
+      },
+      {
+        "requirement": "Populate payment_method_type and payment_method_subtype per split portion in get_payment_method_amount_split",
+        "evidence": "Gift-card splits and non-gift-card split still constructed as bare tuples without type/subtype metadata"
+      },
+      {
+        "requirement": "Thread split-specific payment_method_type and payment_method_subtype through to create_domain_model_for_split_payment",
+        "evidence": "Function still reads payment_method_type and payment_method_subtype from the top-level request object"
+      },
+      {
+        "requirement": "Re-export split_payments types from domain.rs",
+        "evidence": "domain.rs missing split_payments module re-export"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  }
+]

@@ -1,0 +1,242 @@
+diff --git a/crates/diesel_models/src/payment_attempt.rs b/crates/diesel_models/src/payment_attempt.rs
+index ef8f4b14f0..8afcf47772 100644
+--- a/crates/diesel_models/src/payment_attempt.rs
++++ b/crates/diesel_models/src/payment_attempt.rs
+@@ -709,6 +709,7 @@ pub enum PaymentAttemptUpdate {
+         issuer_error_message: Option<String>,
+         network_details: Option<NetworkDetails>,
+         error_details: Box<Option<ErrorDetails>>,
++        connector_metadata: Option<serde_json::Value>,
+     },
+     CaptureUpdate {
+         amount_to_capture: Option<MinorUnit>,
+@@ -905,6 +906,7 @@ pub enum PaymentAttemptUpdate {
+         connector_response_reference_id: Option<String>,
+         authentication_type: Option<storage_enums::AuthenticationType>,
+         amount_captured: Option<MinorUnit>,
++        connector_metadata: Option<serde_json::Value>,
+     },
+     // CaptureUpdate {
+     //     amount_to_capture: Option<MinorUnit>,
+@@ -1561,6 +1563,7 @@ impl From<PaymentAttemptUpdate> for PaymentAttemptUpdateInternal {
+                 connector_response_reference_id,
+                 authentication_type,
+                 amount_captured,
++                connector_metadata,
+             } => {
+                 let (connector_payment_id, connector_payment_data) = connector_payment_id
+                     .map(ConnectorTransactionId::form_id_and_data)
+@@ -1583,7 +1586,7 @@ impl From<PaymentAttemptUpdate> for PaymentAttemptUpdateInternal {
+                     modified_at: common_utils::date_time::now(),
+                     payment_method_id: None,
+                     browser_info: None,
+-                    connector_metadata: None,
++                    connector_metadata: connector_metadata.map(masking::Secret::new),
+                     amount_to_capture: None,
+                     merchant_connector_id: None,
+                     redirection_data: None,
+diff --git a/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs b/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs
+index ffde86e813..df4eba751f 100644
+--- a/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs
++++ b/crates/hyperswitch_domain_models/src/payments/payment_attempt.rs
+@@ -1611,6 +1611,7 @@ pub enum PaymentAttemptUpdate {
+         issuer_error_code: Option<String>,
+         issuer_error_message: Option<String>,
+         network_details: Option<NetworkDetails>,
++        connector_metadata: Option<Value>,
+     },
+     CaptureUpdate {
+         amount_to_capture: Option<MinorUnit>,
+@@ -1973,6 +1974,7 @@ impl PaymentAttemptUpdate {
+                 issuer_error_message,
+                 network_details,
+                 encrypted_payment_method_data,
++                connector_metadata,
+             } => DieselPaymentAttemptUpdate::ErrorUpdate {
+                 connector,
+                 status,
+@@ -1992,6 +1994,7 @@ impl PaymentAttemptUpdate {
+                 network_details,
+                 encrypted_payment_method_data: encrypted_payment_method_data.map(Encryption::from),
+                 error_details: Box::new(None),
++                connector_metadata,
+             },
+             Self::CaptureUpdate {
+                 multiple_capture_count,
+@@ -2199,6 +2202,7 @@ pub enum PaymentAttemptUpdate {
+         updated_by: String,
+         connector_payment_id: Option<String>,
+         connector_response_reference_id: Option<String>,
++        connector_metadata: Option<Value>,
+     },
+     VoidUpdate {
+         status: storage_enums::AttemptStatus,
+@@ -3081,6 +3085,7 @@ impl From<PaymentAttemptUpdate> for diesel_models::PaymentAttemptUpdateInternal
+                 connector_response_reference_id,
+                 amount_capturable,
+                 updated_by,
++                connector_metadata,
+             } => {
+                 // Apply automatic hashing for long connector payment IDs
+                 let (connector_payment_id, connector_payment_data) = connector_payment_id
+@@ -3104,7 +3109,7 @@ impl From<PaymentAttemptUpdate> for diesel_models::PaymentAttemptUpdateInternal
+                     connector_payment_data,
+                     connector: None,
+                     redirection_data: None,
+-                    connector_metadata: None,
++                    connector_metadata,
+                     amount_capturable,
+                     amount_to_capture: None,
+                     connector_token_details: None,
+diff --git a/crates/hyperswitch_domain_models/src/router_data.rs b/crates/hyperswitch_domain_models/src/router_data.rs
+index 5ec057f2ed..0bfd730e18 100644
+--- a/crates/hyperswitch_domain_models/src/router_data.rs
++++ b/crates/hyperswitch_domain_models/src/router_data.rs
+@@ -995,6 +995,7 @@ impl
+                     connector_payment_id: connector_transaction_id,
+                     connector_response_reference_id,
+                     updated_by: storage_scheme.to_string(),
++                    connector_metadata: connector_metadata.map(|c| c.expose().clone()),
+                 }
+             }
+         }
+@@ -1315,6 +1316,7 @@ impl
+                     connector_payment_id: connector_transaction_id,
+                     connector_response_reference_id,
+                     updated_by: storage_scheme.to_string(),
++                    connector_metadata: connector_metadata.map(|c| c.expose().clone()),
+                 }
+             }
+         }
+@@ -1638,6 +1640,7 @@ impl
+                     connector_payment_id: connector_transaction_id,
+                     connector_response_reference_id,
+                     updated_by: storage_scheme.to_string(),
++                    connector_metadata: connector_metadata.map(|c| c.expose().clone()),
+                 }
+             }
+         }
+@@ -1923,6 +1926,7 @@ impl
+                     connector_payment_id: connector_transaction_id,
+                     connector_response_reference_id,
+                     updated_by: storage_scheme.to_string(),
++                    connector_metadata: connector_metadata.map(|c| c.expose().clone()),
+                 }
+             }
+         }
+@@ -2165,6 +2169,7 @@ impl
+                     connector_payment_id: connector_transaction_id,
+                     connector_response_reference_id,
+                     updated_by: storage_scheme.to_string(),
++                    connector_metadata: connector_metadata.map(|c| c.expose().clone()),
+                 }
+             }
+         }
+@@ -2316,7 +2321,7 @@ impl
+                     network_decline_code,
+                     network_advice_code,
+                     network_error_message,
+-                    connector_metadata: _,
++                    connector_metadata,
+                 } = error_response.clone();
+ 
+                 // Handle errors exactly
+@@ -2347,6 +2352,7 @@ impl
+                     updated_by: storage_scheme.to_string(),
+                     connector_payment_id: connector_transaction_id,
+                     connector_response_reference_id,
++                    connector_metadata: connector_metadata.map(|c| c.expose().clone()),
+                 }
+             }
+             Ok(ref _response) => PaymentAttemptUpdate::VoidUpdate {
+diff --git a/crates/hyperswitch_interfaces/src/api_client.rs b/crates/hyperswitch_interfaces/src/api_client.rs
+index 272323ae10..c63f4d015e 100644
+--- a/crates/hyperswitch_interfaces/src/api_client.rs
++++ b/crates/hyperswitch_interfaces/src/api_client.rs
+@@ -381,32 +381,29 @@ where
+ 
+                                     let error = match body.status_code {
+                                         500..=511 => {
+-                                            let error_res = connector_integration
++                                            connector_integration
+                                                 .get_5xx_error_response(
+                                                     body,
+                                                     Some(&mut connector_event),
+-                                                )?;
+-                                            state
+-                                                .event_handler()
+-                                                .log_connector_event(&connector_event);
+-                                            error_res
++                                                )?
+                                         }
+                                         _ => {
+-                                            let error_res = connector_integration
++                                            connector_integration
+                                                 .get_error_response(
+                                                     body,
+                                                     Some(&mut connector_event),
+-                                                )?;
+-                                            if let Some(status) = error_res.attempt_status {
+-                                                router_data.status = status;
+-                                            };
+-                                            state
+-                                                .event_handler()
+-                                                .log_connector_event(&connector_event);
+-                                            error_res
++                                                )?
+                                         }
+                                     };
+ 
++                                    if let Some(status) = error.attempt_status {
++                                        router_data.status = status;
++                                    };
++
++                                    state
++                                        .event_handler()
++                                        .log_connector_event(&connector_event);
++
+                                     router_data.response = Err(error);
+ 
+                                     router_data
+diff --git a/crates/router/src/core/payments/operations/payment_response.rs b/crates/router/src/core/payments/operations/payment_response.rs
+index b25b49ad0a..b9060fb99f 100644
+--- a/crates/router/src/core/payments/operations/payment_response.rs
++++ b/crates/router/src/core/payments/operations/payment_response.rs
+@@ -1625,6 +1625,10 @@ async fn payment_response_update_tracker<F: Clone, T: types::Capturable>(
+                                 connector_response_reference_id: err
+                                     .connector_response_reference_id
+                                     .clone(),
++                                connector_metadata: err
++                                    .connector_metadata
++                                    .clone()
++                                    .map(|s| s.expose().clone()),
+                             }),
+                             option_gsm.and_then(|option_gsm| option_gsm.error_category),
+                         )
+diff --git a/crates/router/src/core/payments/retry.rs b/crates/router/src/core/payments/retry.rs
+index ab0d86cf3d..4668cfcb8f 100644
+--- a/crates/router/src/core/payments/retry.rs
++++ b/crates/router/src/core/payments/retry.rs
+@@ -625,6 +625,10 @@ where
+                 issuer_error_code: error_response.network_decline_code.clone(),
+                 issuer_error_message: error_response.network_error_message.clone(),
+                 network_details: Some(ForeignFrom::foreign_from(error_response)),
++                connector_metadata: error_response
++                    .connector_metadata
++                    .clone()
++                    .map(|s| s.expose().clone()),
+             };
+ 
+             #[cfg(feature = "v1")]
+diff --git a/crates/router/src/workflows/payment_sync.rs b/crates/router/src/workflows/payment_sync.rs
+index bafc9030f3..c81f1bd416 100644
+--- a/crates/router/src/workflows/payment_sync.rs
++++ b/crates/router/src/workflows/payment_sync.rs
+@@ -166,6 +166,7 @@ impl ProcessTrackerWorkflow<SessionState> for PaymentsSyncWorkflow {
+                             issuer_error_message: None,
+                             network_details:None,
+                             encrypted_payment_method_data: None,
++                            connector_metadata: None,
+                         };
+ 
+                     payment_data.payment_attempt = db

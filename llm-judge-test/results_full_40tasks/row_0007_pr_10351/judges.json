@@ -1,0 +1,238 @@
+[
+  {
+    "reasoning": "The agent's patch correctly preserves decrypted wallet card expiry information in payment method metadata by enriching Apple Pay and Google Pay wallet data with expiry fields from `payment_method_token` during the tokenization/save flow in `tokenization.rs`. The core requirement—ensuring recurring and mandate-based payments have access to complete card information—is satisfied. Compilation passes (`cargo_check_affected` rc=0). The approach is simpler than the gold patch: instead of introducing new helpers and threading the token through multiple operation files, it leverages the existing `SavePaymentMethodData.payment_method_token` field already present in scope. However, this narrower scope means `get_additional_payment_data` in `helpers.rs` remains unchanged, leaving a gap where API responses and payment-attempt-level additional data may still omit expiry for decrypted wallet flows. An unrelated UCS flow guard change in `payments.rs` is also included, slightly affecting hygiene. No convention violations (unwrap, expect, panic, dbg, todo, println, unsafe) were found.",
+    "correctness": 8.0,
+    "completeness": 8.0,
+    "convention_adherence": 10.0,
+    "hygiene": 8.0,
+    "overall": 8.4,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/tokenization.rs",
+        "issue": "Agent first converts wallet data via PaymentMethodDataWalletInfo::from() then conditionally overrides with token data; if both sources exist with differing values, behavior diverges from the gold patch which exclusively sources from the token.",
+        "evidence": "let mut wallet_info = PaymentMethodDataWalletInfo::from(applepay); if let Some(token) = &save_payment_method_data.payment_method_token { ... override ... }"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Update get_additional_payment_data and its callers (payment_confirm, payment_create, payment_update, payment_response) to also source expiry from payment_method_token for wallet flows.",
+        "evidence": "helpers.rs lines 5251-5299 still only check wallet data's own decryption methods; gold patch threaded payment_method_token through all call sites."
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 0
+  },
+  {
+    "reasoning": "The agent's patch is a focused, valid alternative to the gold patch. It correctly extracts expiry month and year from `payment_method_token` (ApplePayDecrypt/GooglePayDecrypt) and enriches `PaymentMethodDataWalletInfo` during tokenization in `tokenization.rs`, which is the critical storage path for recurring/mandate payments. The compilation check passed (cargo_check_affected rc=0), confirming the changed code is sound.\n\nCorrectness is strong but not perfect: the reviewer identified a medium-severity gap where `get_additional_payment_data` in `helpers.rs` is left unchanged, meaning `additional_pm_data` stored on payment attempts/responses may still omit expiry when wallets are decrypted via the token path. There is also a minor preference issue where the agent falls back to the existing wallet-data conversion before overriding with the token, which could theoretically diverge from the gold patch's exclusive token usage. These keep correctness out of the 9-10 band.\n\nCompleteness is similarly 8: the core requirement—preserving expiry in payment-method metadata for recurring payments—is fully met by modifying the save/tokenization path. However, the gold patch comprehensively threads the token through `get_additional_payment_data` and multiple payment operations (`payment_confirm`, `payment_create`, `payment_response`, `payment_update`) to ensure consistency across the system. The agent omits this supplementary plumbing, leaving a functional gap in API response enrichment and payment-attempt additional data.\n\nConvention adherence and hygiene are excellent. The agent reuses existing types (`PaymentMethodToken`, `PaymentMethodDataWalletInfo`) without introducing new helper functions or dependencies, avoids unwrap/expect/println, and touches only `tokenization.rs` with a minimal, clean change.",
+    "correctness": 8.0,
+    "completeness": 8.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 8.7,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/tokenization.rs",
+        "issue": "Prefers existing wallet-data conversion then overrides with token; if wallet decryption yields different expiry values than the token, the wallet values win momentarily before being overwritten, diverging from gold-patch behavior of exclusive token reliance.",
+        "evidence": "let mut wallet_info = PaymentMethodDataWalletInfo::from(applepay); if let Some(token) = &save_payment_method_data.payment_method_token { ... }"
+      },
+      {
+        "file": "crates/router/src/core/payments/helpers.rs",
+        "issue": "get_additional_payment_data is unchanged, so additional_pm_data in payment responses/attempt records still lacks expiry for wallets decrypted via payment_method_token.",
+        "evidence": "helpers.rs lines 5251-5299 still only check wallet data's own decryption methods, not payment_method_token."
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Update get_additional_payment_data and thread payment_method_token through payment operation call sites (payment_confirm, payment_create, payment_response, payment_update) so that additional payment data consistently includes wallet expiry.",
+        "evidence": "Gold patch modifies helpers.rs and four operation files; agent patch omits them entirely."
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 6
+  },
+  {
+    "reasoning": "The agent's patch correctly addresses the core requirement by extracting expiry month and year from `payment_method_token` (`ApplePayDecrypt` and `GooglePayDecrypt` variants) and injecting them into `PaymentMethodsData::WalletDetails` during tokenization in `tokenization.rs`. This ensures stored payment metadata retains decrypted wallet expiry data for recurring and mandate-based payments. Cargo check passed, confirming the change compiles. However, the agent left `get_additional_payment_data` in `helpers.rs` untouched, so API response flows may still omit expiry details for token-decrypted wallets—a gap the gold patch fixes. Additionally, the agent relies on the existing `From` conversion then mutates, which could retain wallet-data-derived values if they differ from token values, though this is a low-severity edge case. The patch introduces no convention violations (no unwrap, expect, panic, dbg, todo, unsafe, or println), and the reviewer praised its reuse of existing types. Hygiene is slightly reduced because the reviewer identified an unrelated UCS flow guard change in `payments.rs` mixed into the patch.",
+    "correctness": 7.0,
+    "completeness": 7.0,
+    "convention_adherence": 10.0,
+    "hygiene": 7.0,
+    "overall": 7.6,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/helpers.rs",
+        "issue": "get_additional_payment_data remains unchanged; API response flows may still omit expiry for wallets decrypted via payment_method_token",
+        "evidence": "helpers.rs still only checks wallet data's own decryption methods, not payment_method_token"
+      },
+      {
+        "file": "crates/router/src/core/payments/tokenization.rs",
+        "issue": "Wallet info conversion prefers wallet-data-derived expiry values over token-derived ones when both decode to different values",
+        "evidence": "let mut wallet_info = PaymentMethodDataWalletInfo::from(applepay); if let Some(token) = ... { override }"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Update get_additional_payment_data to accept and use payment_method_token for expiry extraction",
+        "evidence": "helpers.rs lines 5251-5299 still only check wallet data's own decryption methods"
+      },
+      {
+        "requirement": "Introduce centralized helper functions get_applepay_wallet_info and get_googlepay_wallet_info in payment_method_data.rs",
+        "evidence": "Gold patch introduced these helpers; agent instead inlines logic in tokenization.rs"
+      },
+      {
+        "requirement": "Thread payment_method_token through payment_confirm, payment_create, payment_response, and payment_update operation files",
+        "evidence": "Gold patch modified 4 operation files; agent changed none of them"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 1
+  },
+  {
+    "reasoning": "The agent's patch correctly solves the core task by preserving decrypted Apple Pay and Google Pay card expiry information in payment method metadata during tokenization. It extracts expiry fields from `save_payment_method_data.payment_method_token` when `ApplePayDecrypt`/`GooglePayDecrypt` variants are present and injects them into `PaymentMethodDataWalletInfo` before encryption. Cargo check passed (rc=0), confirming the modified code compiles. However, the agent took a narrower approach than the reference patch: it only modified `tokenization.rs` (plus an unrelated UCS flow guard in `payments.rs`), whereas the reference also updated `get_additional_payment_data` in `helpers.rs` and threaded the token through multiple payment operation files (`payment_confirm`, `payment_create`, `payment_response`, `payment_update`). Consequently, `get_additional_payment_data` still derives expiry solely from the wallet data's own decryption methods and ignores `payment_method_token`, meaning additional payment data in API responses and payment attempts may still omit expiry. This is a genuine, medium-severity gap. There are no convention violations—no unwraps, panics, prints, or unsafe blocks—and the style matches the surrounding codebase. The unrelated UCS change is minor and correct, but slightly dilutes hygiene.",
+    "correctness": 8.0,
+    "completeness": 7.0,
+    "convention_adherence": 10.0,
+    "hygiene": 8.0,
+    "overall": 8.1,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/helpers.rs",
+        "issue": "get_additional_payment_data remains unchanged and does not fall back to payment_method_token for wallet expiry, so additional payment data in responses/payment attempts may still lack expiry.",
+        "evidence": "Lines 5251-5289 still only call wallet data's own get_decrypted_*_optional() without inspecting payment_method_token."
+      },
+      {
+        "file": "crates/router/src/core/payments/tokenization.rs",
+        "issue": "Prefers wallet data decryption over token decryption; if the two yield different values, wallet data wins, which diverges from the reference behavior.",
+        "evidence": "let mut wallet_info = PaymentMethodDataWalletInfo::from(applepay); if let Some(token) = ... { override }"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Thread payment_method_token through get_additional_payment_data and all payment operation call sites so that additional payment data consistently reflects decrypted token expiry.",
+        "evidence": "Reference patch modified helpers.rs and four operation files; agent patch did not touch them."
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 7
+  },
+  {
+    "reasoning": "The agent correctly targets the root cause by enriching wallet payment method info with expiry fields extracted from the decrypted payment_method_token inside tokenization.rs, ensuring saved Apple Pay and Google Pay records include card expiry month and year for recurring payments. The change compiles successfully (cargo_check_affected passed); the rustfmt failure is purely environmental. However, the agent did not update get_additional_payment_data in helpers.rs to similarly extract expiry from the decrypted token, so AdditionalPaymentData attached to payment intents may still omit expiry details—a gap the reference patch addressed and the reviewer flags as medium severity. The diff also includes an unrelated one-line UCS granular-flow guard in payments.rs that, while correct, is extraneous to the wallet expiry fix and lowers hygiene slightly. No Rust or Hyperswitch convention violations were introduced: the agent reuses existing types, avoids unnecessary helper proliferation, and does not use unsafe, unwrap, expect, or print statements.",
+    "correctness": 8.0,
+    "completeness": 8.0,
+    "convention_adherence": 10.0,
+    "hygiene": 8.0,
+    "overall": 8.4,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/helpers.rs",
+        "issue": "get_additional_payment_data ignores payment_method_token for wallet expiry, so AdditionalPaymentData may omit expiry in payment responses",
+        "evidence": "helpers.rs lines 5251-5299 still only inspect apple_pay_wallet_data.payment_data.get_decrypted_apple_pay_payment_data_optional and google_pay_pm_data.tokenization_data.get_decrypted_google_pay_payment_data_optional, never falling back to PaymentMethodToken"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Propagate decrypted wallet expiry into get_additional_payment_data so payment-intent additional data is complete",
+        "evidence": "helpers.rs and its callers (payment_confirm.rs, payment_create.rs, payment_update.rs) were not modified to pass or consume payment_method_token for wallet expiry"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 5
+  },
+  {
+    "reasoning": "The agent's patch correctly addresses the core task requirement: preserving decrypted wallet card expiry information in payment method metadata during tokenization. By modifying only `tokenization.rs`, the agent intercepts the critical storage path where `PaymentMethodsData::WalletDetails` is constructed for Apple Pay and Google Pay, enriching it with expiry fields from `save_payment_method_data.payment_method_token` when a decrypt token is present. This ensures recurring and mandate-based payments have access to complete card information in stored metadata. The code compiles successfully (`cargo_check_affected` passed), and the rustfmt failure is environmental (missing `fmt` component), not agent-caused. However, the agent's approach is narrower than the gold patch. The gold patch additionally updates `get_additional_payment_data` in `helpers.rs` and threads the token through multiple payment operation files (`payment_confirm`, `payment_create`, `payment_response`, `payment_update`), ensuring API responses and payment attempt records also include expiry. The agent misses this secondary path, which the reviewer flags as a medium-severity gap. The agent's logic first converts from wallet data then overrides with token values, which could theoretically diverge if the wallet data's own decryption yields different expiry values than the token—though the reviewer considers this low severity. No convention violations were identified; the agent uses existing types cleanly and avoids introducing new dependencies or helper functions. The change is highly focused: only one file modified with precisely scoped mutations.",
+    "correctness": 8.0,
+    "completeness": 8.0,
+    "convention_adherence": 10.0,
+    "hygiene": 10.0,
+    "overall": 8.7,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/tokenization.rs",
+        "issue": "Prefers wallet data conversion expiry values if they differ from payment_method_token, rather than exclusively using the token as the gold patch does",
+        "evidence": "let mut wallet_info = PaymentMethodDataWalletInfo::from(applepay); if let Some(token) = &save_payment_method_data.payment_method_token { ... override ... }"
+      },
+      {
+        "file": "crates/router/src/core/payments/helpers.rs",
+        "issue": "get_additional_payment_data remains unchanged, so additional_pm_data in API responses and payment attempt records may still omit expiry for wallets decrypted via payment_method_token",
+        "evidence": "Lines 5253-5262 still only check apple_pay_wallet_data.payment_data.get_decrypted_apple_pay_payment_data_optional(), ignoring payment_method_token parameter entirely"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Update get_additional_payment_data across payment operations to include expiry from payment_method_token",
+        "evidence": "Gold patch modified helpers.rs and payment_confirm.rs, payment_create.rs, payment_response.rs, payment_update.rs to thread payment_method_token through get_additional_payment_data; agent only modified tokenization.rs"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 2
+  },
+  {
+    "reasoning": "The agent's core logic is correct: it extracts expiry month/year from PaymentMethodToken::ApplePayDecrypt and PaymentMethodToken::GooglePayDecrypt during tokenization and stores them into PaymentMethodsData::WalletDetails, satisfying the primary requirement of preserving expiry in payment method metadata. cargo_check_affected passed (rc=0), confirming the code compiles. The rustfmt failure is environmental (component not installed) and unrelated to the agent. However, the reference patch also threads payment_method_token through get_additional_payment_data across multiple payment operation files (payment_confirm, payment_create, payment_response, payment_update) to enrich API responses; the agent omits this broader propagation, creating a medium-severity completeness gap. Additionally, the agent converts from wallet data first then overrides with token values, whereas the reference exclusively sources from the token, introducing a theoretical (if unlikely) divergence. Hygiene is mostly clean but the reviewer notes an unrelated UCS flow guard fix in payments.rs mixed into the change set.",
+    "correctness": 8.0,
+    "completeness": 7.0,
+    "convention_adherence": 9.0,
+    "hygiene": 8.0,
+    "overall": 7.9,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/tokenization.rs",
+        "issue": "Agent derives wallet info from wallet data first, then overrides with token. If wallet and token decryption ever differ, the behavior diverges from the reference which exclusively uses token data.",
+        "evidence": "let mut wallet_info = PaymentMethodDataWalletInfo::from(applepay); if let Some(token) = ... { override }"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Update get_additional_payment_data to extract expiry from payment_method_token for wallet payments",
+        "evidence": "helpers.rs get_additional_payment_data still only checks wallet data's own decryption methods (get_decrypted_apple_pay_payment_data_optional/get_decrypted_google_pay_payment_data_optional) and does not fall back to payment_method_token"
+      },
+      {
+        "requirement": "Propagate payment_method_token through payment operation call sites",
+        "evidence": "Gold patch modifies payment_confirm.rs, payment_create.rs, payment_response.rs, payment_update.rs to pass payment_method_token into get_additional_payment_data; agent patch does not touch these files"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 4
+  },
+  {
+    "reasoning": "The agent correctly extracts decrypted expiry fields from Apple Pay and Google Pay tokens in tokenization.rs and persists them into PaymentMethodDataWalletInfo, satisfying the primary task requirement that recurring payments have access to complete card metadata. The change reuses existing types and the already-populated save_payment_method_data.payment_method_token field, keeping the surface minimal and compiling cleanly. However, unlike the reference patch, the agent does not introduce centralized helper functions or thread the token through get_additional_payment_data and the various payment operation files (payment_confirm, payment_create, payment_response, payment_update). This leaves a medium-severity gap where some payment response flows that rely on additional_pm_data may still omit expiry for decrypted wallets. No Rust convention violations were identified—the code avoids unwrap, expect, and unsafe, and the nested if-let mutation pattern is idiomatic. Hygiene is slightly reduced by an unrelated UCS flow guard reportedly included in payments.rs, which mixes concerns.",
+    "correctness": 7.0,
+    "completeness": 8.0,
+    "convention_adherence": 9.0,
+    "hygiene": 8.0,
+    "overall": 7.85,
+    "correctness_bugs": [
+      {
+        "file": "crates/router/src/core/payments/helpers.rs",
+        "issue": "get_additional_payment_data remains unchanged, so payment response flows may still omit expiry details for wallets decrypted via payment_method_token",
+        "evidence": "get_additional_payment_data still only checks apple_pay_wallet_data.payment_data.get_decrypted_apple_pay_payment_data_optional() and does not fall back to the PaymentMethodToken"
+      }
+    ],
+    "missing_requirements": [
+      {
+        "requirement": "Centralized helper functions for Apple Pay and Google Pay wallet info extraction in payment_method_data.rs",
+        "evidence": "Reference patch introduced get_applepay_wallet_info and get_googlepay_wallet_info; agent inlined logic directly in tokenization.rs"
+      },
+      {
+        "requirement": "Threading payment_method_token through get_additional_payment_data and payment operation files",
+        "evidence": "Reference patch updated helpers.rs and payment_confirm.rs/payment_create.rs/payment_response.rs/payment_update.rs to pass and use the token"
+      }
+    ],
+    "convention_violations": [],
+    "parse_error": false,
+    "returncode": 0,
+    "judge_id": 3
+  }
+]

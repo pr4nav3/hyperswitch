@@ -1,0 +1,187 @@
+From ad4d17e9a4981887b27401fba0e8eed694863f32 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 29 Oct 2025 13:31:35 +0530
+Subject: [PATCH 1/6] update
+
+---
+ .../hyperswitch_connectors/src/connectors/adyen/transformers.rs  | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+index 33ac44309e0..27f7fcfb4e9 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+@@ -4965,6 +4965,7 @@ impl TryFrom<PaymentsCaptureResponseRouterData<AdyenCaptureResponse>>
+             // From the docs, the only value returned is "received", outcome of refund is available
+             // through refund notification webhook
+             // For more info: https://docs.adyen.com/online-payments/capture
++            //
+             status: storage_enums::AttemptStatus::Pending,
+             response: Ok(PaymentsResponseData::TransactionResponse {
+                 resource_id: ResponseId::ConnectorTransactionId(connector_transaction_id),
+
+From add3ef711c53c344129a94d09eec22e87051ea72 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 29 Oct 2025 13:35:14 +0530
+Subject: [PATCH 2/6] Merge branch 'main' of
+ https://github.com/juspay/hyperswitch into adyen-manual-capture
+
+
+From b894f64b59a5eb072fa0c837a9783b6f158dd9a7 Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 29 Oct 2025 15:06:58 +0530
+Subject: [PATCH 3/6] update
+
+---
+ .../src/connectors/adyen/transformers.rs                     | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+index 89f107c1177..11bde2b26e0 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+@@ -4932,7 +4932,7 @@ impl TryFrom<&AdyenRouterData<&PaymentsCaptureRouterData>> for AdyenCaptureReque
+             reference,
+             amount: Amount {
+                 currency: item.router_data.request.currency,
+-                value: item.amount.to_owned(),
++                value: item.router_data.request.minor_amount_to_capture,
+             },
+         })
+     }
+@@ -4973,7 +4973,6 @@ impl TryFrom<PaymentsCaptureResponseRouterData<AdyenCaptureResponse>>
+             // From the docs, the only value returned is "received", outcome of refund is available
+             // through refund notification webhook
+             // For more info: https://docs.adyen.com/online-payments/capture
+-            //
+             status: storage_enums::AttemptStatus::Pending,
+             response: Ok(PaymentsResponseData::TransactionResponse {
+                 resource_id: ResponseId::ConnectorTransactionId(connector_transaction_id),
+@@ -4985,7 +4984,7 @@ impl TryFrom<PaymentsCaptureResponseRouterData<AdyenCaptureResponse>>
+                 incremental_authorization_allowed: None,
+                 charges,
+             }),
+-            amount_captured: Some(0),
++            amount_captured: Some(item.response.amount.value.get_amount_as_i64()),
+             ..item.data
+         })
+     }
+
+From daa4a6a33afd04921e5e74504c06c5569c8cd35b Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 29 Oct 2025 16:04:11 +0530
+Subject: [PATCH 4/6] cypress
+
+---
+ cypress-tests/cypress/e2e/configs/Payment/Adyen.js | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Adyen.js b/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
+index a7d61a7f18d..4fece1f4b5d 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
+@@ -207,7 +207,7 @@ export const connectorDetails = {
+           status: "processing",
+           amount: 6000,
+           amount_capturable: 6000,
+-          amount_received: 0,
++          amount_received: 6000,
+         },
+       },
+     },
+@@ -221,7 +221,7 @@ export const connectorDetails = {
+           status: "processing",
+           amount: 6000,
+           amount_capturable: 6000,
+-          amount_received: 0, // Amount is updated via webhooks
++          amount_received: 6000, // Amount is updated via webhooks
+         },
+       },
+     },
+@@ -235,7 +235,7 @@ export const connectorDetails = {
+           status: "processing",
+           amount: 6000,
+           amount_capturable: 6000,
+-          amount_received: 0,
++          amount_received: 2000,
+         },
+       },
+     },
+
+From ccb8b698c4b479de7943252d3fffea1bace67c1e Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Wed, 29 Oct 2025 16:08:36 +0530
+Subject: [PATCH 5/6] update cypress
+
+---
+ cypress-tests/cypress/e2e/configs/Payment/Adyen.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Adyen.js b/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
+index 4fece1f4b5d..63ca3256bdc 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
+@@ -221,7 +221,7 @@ export const connectorDetails = {
+           status: "processing",
+           amount: 6000,
+           amount_capturable: 6000,
+-          amount_received: 6000, // Amount is updated via webhooks
++          amount_received: 7000, // Amount is updated via webhooks
+         },
+       },
+     },
+
+From 19ad2b3dbd8e599b25db1559f258fbeec511c61e Mon Sep 17 00:00:00 2001
+From: nihtin <nithingowdan77@gmail.com>
+Date: Thu, 30 Oct 2025 10:06:44 +0530
+Subject: [PATCH 6/6] cypress fix
+
+---
+ .../src/connectors/adyen/transformers.rs                    | 2 +-
+ cypress-tests/cypress/e2e/configs/Payment/Adyen.js          | 6 +++---
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+index 11bde2b26e0..4e50d52882e 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+@@ -4984,7 +4984,7 @@ impl TryFrom<PaymentsCaptureResponseRouterData<AdyenCaptureResponse>>
+                 incremental_authorization_allowed: None,
+                 charges,
+             }),
+-            amount_captured: Some(item.response.amount.value.get_amount_as_i64()),
++            amount_captured: None, // updated by Webhooks
+             ..item.data
+         })
+     }
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Adyen.js b/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
+index 63ca3256bdc..a02e58fb8ca 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Adyen.js
+@@ -207,7 +207,7 @@ export const connectorDetails = {
+           status: "processing",
+           amount: 6000,
+           amount_capturable: 6000,
+-          amount_received: 6000,
++          amount_received: null,
+         },
+       },
+     },
+@@ -221,7 +221,7 @@ export const connectorDetails = {
+           status: "processing",
+           amount: 6000,
+           amount_capturable: 6000,
+-          amount_received: 7000, // Amount is updated via webhooks
++          amount_received: null, // Amount is updated via webhooks
+         },
+       },
+     },
+@@ -235,7 +235,7 @@ export const connectorDetails = {
+           status: "processing",
+           amount: 6000,
+           amount_capturable: 6000,
+-          amount_received: 2000,
++          amount_received: null,
+         },
+       },
+     },

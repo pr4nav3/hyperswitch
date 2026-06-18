@@ -1,0 +1,257 @@
+From 15761f9d311b3e570671f8287631d4d906a43f89 Mon Sep 17 00:00:00 2001
+From: Anurag Thakur <anurag.thakur@juspay.in>
+Date: Wed, 26 Nov 2025 13:47:24 +0530
+Subject: [PATCH] fix(router): Propagate payment method type and subtype to
+ split payment attempts (v2)
+
+---
+ .../src/payments/split_payments.rs            | 16 +++++-
+ crates/router/src/core/payments/operations.rs |  5 +-
+ .../operations/payment_confirm_intent.rs      | 21 +++++---
+ crates/router/src/core/split_payments.rs      | 49 +++++++++++++------
+ crates/router/src/types/domain.rs             |  7 +++
+ 5 files changed, 68 insertions(+), 30 deletions(-)
+
+diff --git a/crates/hyperswitch_domain_models/src/payments/split_payments.rs b/crates/hyperswitch_domain_models/src/payments/split_payments.rs
+index 9aed6989833..e82832f3e7c 100644
+--- a/crates/hyperswitch_domain_models/src/payments/split_payments.rs
++++ b/crates/hyperswitch_domain_models/src/payments/split_payments.rs
+@@ -1,8 +1,20 @@
+ use api_models::payments::PaymentMethodData;
+ use common_utils::types::MinorUnit;
+ 
++#[derive(Clone, Debug)]
++pub struct PaymentMethodDetails {
++    pub payment_method_data: PaymentMethodData,
++    pub payment_method_type: common_enums::PaymentMethod,
++    pub payment_method_subtype: common_enums::PaymentMethodType,
++}
+ /// There can be multiple gift-cards, but at most one non-gift card PM
+ pub struct PaymentMethodAmountSplit {
+-    pub balance_pm_split: Vec<(PaymentMethodData, MinorUnit)>,
+-    pub non_balance_pm_split: Option<(PaymentMethodData, MinorUnit)>,
++    pub balance_pm_split: Vec<PaymentMethodDetailsWithSplitAmount>,
++    pub non_balance_pm_split: Option<PaymentMethodDetailsWithSplitAmount>,
++}
++
++#[derive(Clone, Debug)]
++pub struct PaymentMethodDetailsWithSplitAmount {
++    pub payment_method_details: PaymentMethodDetails,
++    pub split_amount: MinorUnit,
+ }
+diff --git a/crates/router/src/core/payments/operations.rs b/crates/router/src/core/payments/operations.rs
+index da9d06ef33b..753c3d17a05 100644
+--- a/crates/router/src/core/payments/operations.rs
++++ b/crates/router/src/core/payments/operations.rs
+@@ -237,10 +237,7 @@ pub trait GetTracker<F: Clone, D, R>: Send {
+         _merchant_context: &domain::Platform,
+         _profile: &domain::Profile,
+         _header_payload: &hyperswitch_domain_models::payments::HeaderPayload,
+-        _split_amount_data: (
+-            api_models::payments::PaymentMethodData,
+-            common_utils::types::MinorUnit,
+-        ),
++        _pm_split_amount_data: domain::PaymentMethodDetailsWithSplitAmount,
+         _attempts_group_id: &common_utils::id_type::GlobalAttemptGroupId,
+     ) -> RouterResult<GetTrackerResponse<D>> {
+         Err(errors::ApiErrorResponse::NotImplemented {
+diff --git a/crates/router/src/core/payments/operations/payment_confirm_intent.rs b/crates/router/src/core/payments/operations/payment_confirm_intent.rs
+index f1807ebe789..6012248f710 100644
+--- a/crates/router/src/core/payments/operations/payment_confirm_intent.rs
++++ b/crates/router/src/core/payments/operations/payment_confirm_intent.rs
+@@ -292,12 +292,9 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
+         payment_id: &id_type::GlobalPaymentId,
+         request: &PaymentsConfirmIntentRequest,
+         platform: &domain::Platform,
+-        profile: &domain::Profile,
+-        header_payload: &hyperswitch_domain_models::payments::HeaderPayload,
+-        split_amount_data: (
+-            api_models::payments::PaymentMethodData,
+-            common_utils::types::MinorUnit,
+-        ),
++        _profile: &domain::Profile,
++        _header_payload: &hyperswitch_domain_models::payments::HeaderPayload,
++        pm_split_amount_data: domain::PaymentMethodDetailsWithSplitAmount,
+         attempts_group_id: &id_type::GlobalAttemptGroupId,
+     ) -> RouterResult<operations::GetTrackerResponse<PaymentConfirmData<F>>> {
+         let db = &*state.store;
+@@ -350,8 +347,14 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
+                 storage_scheme,
+                 request,
+                 encrypted_data,
+-                split_amount_data.1,
++                pm_split_amount_data.split_amount,
+                 attempts_group_id,
++                pm_split_amount_data
++                    .payment_method_details
++                    .payment_method_type,
++                pm_split_amount_data
++                    .payment_method_details
++                    .payment_method_subtype,
+             )
+             .await?;
+ 
+@@ -367,7 +370,9 @@ impl<F: Send + Clone + Sync> GetTracker<F, PaymentConfirmData<F>, PaymentsConfir
+ 
+         let payment_method_data =
+             hyperswitch_domain_models::payment_method_data::PaymentMethodData::from(
+-                split_amount_data.0,
++                pm_split_amount_data
++                    .payment_method_details
++                    .payment_method_data,
+             );
+ 
+         let payment_address = hyperswitch_domain_models::payment_address::PaymentAddress::new(
+diff --git a/crates/router/src/core/split_payments.rs b/crates/router/src/core/split_payments.rs
+index e0865519832..295e1ade7ae 100644
+--- a/crates/router/src/core/split_payments.rs
++++ b/crates/router/src/core/split_payments.rs
+@@ -146,7 +146,7 @@ async fn get_payment_method_amount_split(
+     let total_amount = payment_intent.amount_details.calculate_net_amount();
+ 
+     let mut remaining_to_allocate = total_amount;
+-    let pm_split_amt_tuple: Vec<(PaymentMethodData, MinorUnit)> = gift_card_data_vec
++    let pm_split_amt_tuple = gift_card_data_vec
+         .iter()
+         .filter_map(|gift_card_card| {
+             if remaining_to_allocate == MinorUnit::zero() {
+@@ -175,25 +175,39 @@ async fn get_payment_method_amount_split(
+             let amount_to_use = pm_balance.balance.min(remaining_to_allocate);
+             remaining_to_allocate = remaining_to_allocate - amount_to_use;
+ 
+-            Some(Ok((
+-                PaymentMethodData::GiftCard(Box::new(gift_card_card.to_owned())),
+-                amount_to_use,
+-            )))
++            Some(Ok(split_payments::PaymentMethodDetailsWithSplitAmount {
++                split_amount: amount_to_use,
++                payment_method_details: split_payments::PaymentMethodDetails {
++                    payment_method_data: PaymentMethodData::GiftCard(Box::new(
++                        gift_card_card.to_owned(),
++                    )),
++                    payment_method_type: common_enums::PaymentMethod::GiftCard,
++                    payment_method_subtype: gift_card_card.get_payment_method_type(),
++                },
++            }))
+         })
+         .collect::<RouterResult<Vec<_>>>()?;
+ 
+     // If the gift card balances are not sufficient for payment, use the non-gift card payment method
+     // for the remaining amount
+     if remaining_to_allocate > MinorUnit::zero() {
+-        let non_gift_card_pm_data = non_gift_card_pm_data
+-            .ok_or(errors::ApiErrorResponse::InvalidRequestData {
++        let non_gift_card_pm =
++            non_gift_card_pm_data.ok_or(errors::ApiErrorResponse::InvalidRequestData {
+                 message: "Requires additional payment method data".to_string(),
+-            })?
+-            .payment_method_data;
++            })?;
++
++        let non_gift_card_pm_data = split_payments::PaymentMethodDetails {
++            payment_method_data: non_gift_card_pm.payment_method_data,
++            payment_method_type: non_gift_card_pm.payment_method_type,
++            payment_method_subtype: non_gift_card_pm.payment_method_subtype,
++        };
+ 
+         Ok(split_payments::PaymentMethodAmountSplit {
+             balance_pm_split: pm_split_amt_tuple,
+-            non_balance_pm_split: Some((non_gift_card_pm_data, remaining_to_allocate)),
++            non_balance_pm_split: Some(split_payments::PaymentMethodDetailsWithSplitAmount {
++                split_amount: remaining_to_allocate,
++                payment_method_details: non_gift_card_pm_data,
++            }),
+         })
+     } else {
+         Ok(split_payments::PaymentMethodAmountSplit {
+@@ -268,7 +282,7 @@ pub(crate) async fn split_payments_execute_core(
+     ) = {
+         // If a non-balance Payment Method is present, we will execute that first, otherwise we will execute
+         // a balance Payment Method
+-        let (payment_method_data, amount) = pm_amount_split
++        let payment_method_amount_details = pm_amount_split
+             .non_balance_pm_split
+             .clone()
+             .or_else(|| pm_amount_split.balance_pm_split.first().cloned())
+@@ -289,7 +303,7 @@ pub(crate) async fn split_payments_execute_core(
+                 &platform,
+                 &profile,
+                 &header_payload,
+-                (payment_method_data, amount),
++                payment_method_amount_details,
+                 &attempts_group_id,
+             )
+             .await?;
+@@ -367,7 +381,7 @@ pub(crate) async fn split_payments_execute_core(
+             .collect()
+     };
+ 
+-    for (payment_method_data, amount) in remaining_pm_amount_split {
++    for payment_method_amount_details in remaining_pm_amount_split {
+         let operation = PaymentIntentConfirm;
+ 
+         let get_tracker_response: operations::GetTrackerResponse<
+@@ -381,7 +395,7 @@ pub(crate) async fn split_payments_execute_core(
+                 &platform,
+                 &profile,
+                 &header_payload,
+-                (payment_method_data.to_owned(), amount.to_owned()),
++                payment_method_amount_details,
+                 &attempts_group_id,
+             )
+             .await?;
+@@ -477,6 +491,7 @@ pub(crate) async fn split_payments_execute_core(
+ }
+ 
+ /// Construct the domain model from the ConfirmIntentRequest and PaymentIntent
++#[allow(clippy::too_many_arguments)]
+ #[cfg(feature = "v2")]
+ pub async fn create_domain_model_for_split_payment(
+     payment_intent: &PaymentIntent,
+@@ -486,6 +501,8 @@ pub async fn create_domain_model_for_split_payment(
+     encrypted_data: hyperswitch_domain_models::payments::payment_attempt::DecryptedPaymentAttempt,
+     split_amount: MinorUnit,
+     attempts_group_id: &id_type::GlobalAttemptGroupId,
++    payment_method_type: enums::PaymentMethod,
++    payment_method_subtype: enums::PaymentMethodType,
+ ) -> common_utils::errors::CustomResult<domain::PaymentAttempt, errors::ApiErrorResponse> {
+     let id = id_type::GlobalAttemptId::generate(&cell_id);
+     let intent_amount_details = payment_intent.amount_details.clone();
+@@ -555,10 +572,10 @@ pub async fn create_domain_model_for_split_payment(
+             .map(masking::Secret::new),
+         profile_id: payment_intent.profile_id.clone(),
+         organization_id: payment_intent.organization_id.clone(),
+-        payment_method_type: request.payment_method_type,
++        payment_method_type,
+         payment_method_id: request.payment_method_id.clone(),
+         connector_payment_id: None,
+-        payment_method_subtype: request.payment_method_subtype,
++        payment_method_subtype,
+         authentication_applied: None,
+         external_reference_id: None,
+         payment_method_billing_address,
+diff --git a/crates/router/src/types/domain.rs b/crates/router/src/types/domain.rs
+index 58e05b63faa..b074b3141b6 100644
+--- a/crates/router/src/types/domain.rs
++++ b/crates/router/src/types/domain.rs
+@@ -39,6 +39,11 @@ mod network_tokenization {
+     pub use hyperswitch_domain_models::network_tokenization::*;
+ }
+ 
++#[cfg(feature = "v2")]
++mod split_payments {
++    pub use hyperswitch_domain_models::payments::split_payments::*;
++}
++
+ pub use customers::*;
+ pub use merchant_account::*;
+ 
+@@ -97,6 +102,8 @@ pub use payment_methods::*;
+ pub use platform::*;
+ pub use routing::*;
+ #[cfg(feature = "v2")]
++pub use split_payments::*;
++#[cfg(feature = "v2")]
+ pub use tokenization::*;
+ #[cfg(feature = "olap")]
+ pub use user::*;

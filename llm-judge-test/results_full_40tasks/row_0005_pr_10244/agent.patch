@@ -1,0 +1,202 @@
+diff --git a/crates/router/src/core/unified_connector_service/transformers.rs b/crates/router/src/core/unified_connector_service/transformers.rs
+index 9ff71ec2ef..abb6e56d3a 100644
+--- a/crates/router/src/core/unified_connector_service/transformers.rs
++++ b/crates/router/src/core/unified_connector_service/transformers.rs
+@@ -120,7 +120,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -215,7 +215,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -226,7 +226,7 @@ impl
+             .and_then(|val| val.as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -580,7 +580,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -669,7 +669,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -753,7 +753,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -764,7 +764,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -854,7 +854,7 @@ impl transformers::ForeignTryFrom<&RouterData<Capture, PaymentsCaptureData, Paym
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -926,7 +926,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -937,7 +937,7 @@ impl
+             .and_then(|val| val.as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -1057,7 +1057,7 @@ impl
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -1068,7 +1068,7 @@ impl
+             .and_then(|val| val.as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -1304,7 +1304,7 @@ impl
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1314,7 +1314,7 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1413,7 +1413,7 @@ impl
+                 .and_then(|val| val.as_object()) //secret
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1444,7 +1444,7 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1525,7 +1525,7 @@ impl
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -1535,7 +1535,7 @@ impl
+                 .and_then(|meta| meta.peek().as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -2487,7 +2487,7 @@ impl transformers::ForeignTryFrom<router_request_types::CompleteAuthorizeRedirec
+                 })
+                 .map(|map| {
+                     map.into_iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k, s.to_string())))
++                        .map(|(k, v)| (k, v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),
+@@ -3309,7 +3309,7 @@ impl transformers::ForeignTryFrom<&RouterData<Execute, RefundsData, RefundsRespo
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -3392,7 +3392,7 @@ impl transformers::ForeignTryFrom<&RouterData<RSync, RefundsData, RefundsRespons
+             .and_then(|val| val.peek().as_object())
+             .map(|map| {
+                 map.iter()
+-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                    .map(|(k, v)| (k.clone(), v.to_string()))
+                     .collect::<HashMap<String, String>>()
+             })
+             .unwrap_or_default();
+@@ -3537,7 +3537,7 @@ impl transformers::ForeignTryFrom<&RouterData<api::Void, PaymentsCancelData, Pay
+                 .and_then(|val| val.as_object())
+                 .map(|map| {
+                     map.iter()
+-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
++                        .map(|(k, v)| (k.clone(), v.to_string()))
+                         .collect::<HashMap<String, String>>()
+                 })
+                 .unwrap_or_default(),

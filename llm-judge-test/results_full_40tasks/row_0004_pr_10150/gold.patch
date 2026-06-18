@@ -1,0 +1,231 @@
+From 7b1abc35492dd43d039a004255609748d654be50 Mon Sep 17 00:00:00 2001
+From: Ben Janecke <ben.janecke@peachpayments.com>
+Date: Thu, 6 Nov 2025 08:47:12 +0200
+Subject: [PATCH 1/4] fix(connector): add missing COF parameters for ACI
+ recurring payments
+
+Implement complete Card on File (COF) parameter support for ACI connector
+according to ACI documentation. This adds the missing initialTransactionId
+field for MIT (Merchant Initiated Transaction) recurring payments and
+extends support for all instruction types (UNSCHEDULED, RECURRING, INSTALLMENT).
+
+The implementation stores the initial transaction ID in mandate_metadata
+during CIT (Customer Initiated Transaction) and retrieves it for subsequent
+MIT payments, following the same pattern used by the Paysafe connector.
+---
+ .../src/connectors/aci/transformers.rs        | 33 +++++++++++++++++--
+ 1 file changed, 31 insertions(+), 2 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs b/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
+index eb659a8204b..2fcfe75875c 100644
+--- a/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
+@@ -557,6 +557,8 @@ pub enum InstructionMode {
+ #[serde(rename_all = "UPPERCASE")]
+ pub enum InstructionType {
+     Unscheduled,
++    Recurring,
++    Installment,
+ }
+ 
+ #[derive(Debug, Clone, Serialize)]
+@@ -579,6 +581,10 @@ pub struct Instruction {
+     #[serde(rename = "standingInstruction.source")]
+     source: InstructionSource,
+ 
++    #[serde(rename = "standingInstruction.initialTransactionId")]
++    #[serde(skip_serializing_if = "Option::is_none")]
++    initial_transaction_id: Option<String>,
++
+     create_registration: Option<bool>,
+ }
+ 
+@@ -830,13 +836,26 @@ fn get_instruction_details(
+             mode: InstructionMode::Initial,
+             transaction_type: InstructionType::Unscheduled,
+             source: InstructionSource::CardholderInitiatedTransaction,
++            initial_transaction_id: None,
+             create_registration: Some(true),
+         });
+     } else if item.router_data.request.mandate_id.is_some() {
++        let initial_transaction_id = item
++            .router_data
++            .recurring_mandate_payment_data
++            .as_ref()
++            .and_then(|mandate_data| mandate_data.mandate_metadata.as_ref())
++            .and_then(|metadata| {
++                serde_json::from_value::<AciMandateMetadata>(metadata.clone().expose())
++                    .ok()
++                    .map(|m| m.initial_transaction_id)
++            });
++
+         return Some(Instruction {
+             mode: InstructionMode::Repeated,
+             transaction_type: InstructionType::Unscheduled,
+             source: InstructionSource::MerchantInitiatedTransaction,
++            initial_transaction_id,
+             create_registration: None,
+         });
+     }
+@@ -1071,7 +1090,9 @@ where
+             .map(|id| MandateReference {
+                 connector_mandate_id: Some(id.expose()),
+                 payment_method_id: None,
+-                mandate_metadata: None,
++                mandate_metadata: Some(Secret::new(serde_json::json!(AciMandateMetadata {
++                    initial_transaction_id: item.response.id.clone()
++                }))),
+                 connector_mandate_request_reference_id: None,
+             });
+ 
+@@ -1450,7 +1471,9 @@ impl
+         let mandate_reference = Some(MandateReference {
+             connector_mandate_id: Some(item.response.id.clone()),
+             payment_method_id: None,
+-            mandate_metadata: None,
++            mandate_metadata: Some(Secret::new(serde_json::json!(AciMandateMetadata {
++                initial_transaction_id: item.response.id.clone()
++            }))),
+             connector_mandate_request_reference_id: None,
+         });
+ 
+@@ -1581,3 +1604,9 @@ pub struct AciWebhookNotification {
+     pub action: Option<AciWebhookAction>,
+     pub payload: serde_json::Value,
+ }
++
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++pub struct AciMandateMetadata {
++    pub initial_transaction_id: String,
++}
+\ No newline at end of file
+
+From d477ad1ce877337bd978f16bb336a151f9d207df Mon Sep 17 00:00:00 2001
+From: Ben Janecke <ben.janecke@peachpayments.com>
+Date: Thu, 20 Nov 2025 23:15:30 +0200
+Subject: [PATCH 2/4] fix(aci):  Added MitCategory import from
+ hyperswitch_domain_models::payment_methods::storage_enums
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Mapping Details
+
+The implementation maps the mit_category values to ACI's instruction types as follows:
+- Installment → InstructionType::Installment - For fixed purchase amounts split into scheduled payments
+- Recurring → InstructionType::Recurring - For regular interval payments
+- Unscheduled → InstructionType::Unscheduled - For merchant-initiated transactions without a fixed schedule
+- Resubmission → InstructionType::Unscheduled - For retried transactions after failed attempts
+- None → InstructionType::Unscheduled - Default fallback
+---
+ .../src/connectors/aci/transformers.rs                | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs b/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
+index 2fcfe75875c..bb8b76fbdb1 100644
+--- a/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
+@@ -8,6 +8,7 @@ use hyperswitch_domain_models::{
+     payment_method_data::{
+         BankRedirectData, Card, NetworkTokenData, PayLaterData, PaymentMethodData, WalletData,
+     },
++    payment_methods::storage_enums::MitCategory,
+     router_data::{ConnectorAuthType, ErrorResponse, RouterData},
+     router_flow_types::SetupMandate,
+     router_request_types::{
+@@ -851,9 +852,17 @@ fn get_instruction_details(
+                     .map(|m| m.initial_transaction_id)
+             });
+ 
++        let transaction_type = match item.router_data.request.mit_category.as_ref() {
++            Some(MitCategory::Installment) => InstructionType::Installment,
++            Some(MitCategory::Recurring) => InstructionType::Recurring,
++            Some(MitCategory::Unscheduled) | Some(MitCategory::Resubmission) | None => {
++                InstructionType::Unscheduled
++            }
++        };
++
+         return Some(Instruction {
+             mode: InstructionMode::Repeated,
+-            transaction_type: InstructionType::Unscheduled,
++            transaction_type,
+             source: InstructionSource::MerchantInitiatedTransaction,
+             initial_transaction_id,
+             create_registration: None,
+
+From 12fb01bc325878c9aa4311abfd5ee21113f380ba Mon Sep 17 00:00:00 2001
+From: Anurag Singh <anurag.singh.001@MacBookPro.lan>
+Date: Tue, 20 Jan 2026 03:14:11 +0530
+Subject: [PATCH 3/4] fix: store response.id in
+ connector_mandate_request_reference_id field
+
+---
+ .../src/connectors/aci/transformers.rs        | 29 +++++--------------
+ 1 file changed, 7 insertions(+), 22 deletions(-)
+
+diff --git a/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs b/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
+index a5c4b653830..d7fa676e8a9 100644
+--- a/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/aci/transformers.rs
+@@ -845,14 +845,9 @@ fn get_instruction_details(
+     } else if item.router_data.request.mandate_id.is_some() {
+         let initial_transaction_id = item
+             .router_data
+-            .recurring_mandate_payment_data
+-            .as_ref()
+-            .and_then(|mandate_data| mandate_data.mandate_metadata.as_ref())
+-            .and_then(|metadata| {
+-                serde_json::from_value::<AciMandateMetadata>(metadata.clone().expose())
+-                    .ok()
+-                    .map(|m| m.initial_transaction_id)
+-            });
++            .request
++            .get_connector_mandate_request_reference_id()
++            .ok();
+ 
+         let transaction_type = match item.router_data.request.mit_category.as_ref() {
+             Some(MitCategory::Installment) => InstructionType::Installment,
+@@ -1101,10 +1096,8 @@ where
+             .map(|id| MandateReference {
+                 connector_mandate_id: Some(id.expose()),
+                 payment_method_id: None,
+-                mandate_metadata: Some(Secret::new(serde_json::json!(AciMandateMetadata {
+-                    initial_transaction_id: item.response.id.clone()
+-                }))),
+-                connector_mandate_request_reference_id: None,
++                mandate_metadata: None,
++                connector_mandate_request_reference_id: Some(item.response.id.clone()),
+             });
+ 
+         let auto_capture = matches!(
+@@ -1482,10 +1475,8 @@ impl
+         let mandate_reference = Some(MandateReference {
+             connector_mandate_id: Some(item.response.id.clone()),
+             payment_method_id: None,
+-            mandate_metadata: Some(Secret::new(serde_json::json!(AciMandateMetadata {
+-                initial_transaction_id: item.response.id.clone()
+-            }))),
+-            connector_mandate_request_reference_id: None,
++            mandate_metadata: None,
++            connector_mandate_request_reference_id: Some(item.response.id.clone()),
+         });
+ 
+         let status = if SUCCESSFUL_CODES.contains(&item.response.result.code.as_str()) {
+@@ -1615,9 +1606,3 @@ pub struct AciWebhookNotification {
+     pub action: Option<AciWebhookAction>,
+     pub payload: serde_json::Value,
+ }
+-
+-#[derive(Debug, Clone, Serialize, Deserialize)]
+-#[serde(rename_all = "snake_case")]
+-pub struct AciMandateMetadata {
+-    pub initial_transaction_id: String,
+-}
+\ No newline at end of file
+
+From 4afbd157c98c8f13005cef4a0770e7dce50864ce Mon Sep 17 00:00:00 2001
+From: Anurag Singh <anurag.singh.001@Anurag-Singh-WPMHJ5619X.local>
+Date: Tue, 10 Feb 2026 15:59:48 +0530
+Subject: [PATCH 4/4] chore: trigger cypress tests
+

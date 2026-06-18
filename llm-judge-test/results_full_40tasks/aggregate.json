@@ -1,0 +1,12 @@
+{
+  "dataset": "run1.subset_40.jsonl",
+  "model": "litellm/open-large",
+  "judge_model": "litellm/open-large",
+  "total_selected": 40,
+  "ok": 39,
+  "errors": 1,
+  "mean_file_f1": 0.554,
+  "mean_style_score": 8.462,
+  "mean_judge_overall": 6.951,
+  "summary_jsonl": "results_full_40tasks/summary.jsonl"
+}

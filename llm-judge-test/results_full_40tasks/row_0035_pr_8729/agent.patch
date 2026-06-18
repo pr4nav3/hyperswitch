@@ -1,0 +1,33 @@
+diff --git a/crates/router/src/core/payment_methods/cards.rs b/crates/router/src/core/payment_methods/cards.rs
+index 8f29e05e15..172063af32 100644
+--- a/crates/router/src/core/payment_methods/cards.rs
++++ b/crates/router/src/core/payment_methods/cards.rs
+@@ -733,7 +733,14 @@ impl PaymentMethodsController for PmCards<'_> {
+ 
+         Ok(if let Some(mut crd) = card_decrypted {
+             crd.scheme.clone_from(&pm.scheme);
+-            Some(crd)
++            if crd.card_number.is_some() {
++                Some(crd)
++            } else {
++                logger::debug!(
++                    "Getting card details from locker as card number is not found in payment methods table"
++                );
++                Some(get_card_details_from_locker(self.state, pm).await?)
++            }
+         } else {
+             logger::debug!(
+                 "Getting card details from locker as it is not found in payment methods table"
+diff --git a/crates/router/src/core/payouts/validator.rs b/crates/router/src/core/payouts/validator.rs
+index 3d58d1f367..0d93f01581 100644
+--- a/crates/router/src/core/payouts/validator.rs
++++ b/crates/router/src/core/payouts/validator.rs
+@@ -243,7 +243,7 @@ pub async fn validate_create_request(
+                             card_number: card.card_number.get_required_value("card_number")?,
+                             card_holder_name: card.card_holder_name,
+                             expiry_month: card.expiry_month.get_required_value("expiry_month")?,
+-                            expiry_year: card.expiry_year.get_required_value("expiry_month")?,
++                            expiry_year: card.expiry_year.get_required_value("expiry_year")?,
+                         },
+                     ))),
+                     (_, Some(bank)) => Ok(Some(payouts::PayoutMethodData::Bank(bank))),

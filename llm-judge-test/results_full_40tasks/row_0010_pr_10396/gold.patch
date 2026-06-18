@@ -1,0 +1,920 @@
+From 7bae8220b2cb8d7fd5eaecd4c86e16f47b217fe5 Mon Sep 17 00:00:00 2001
+From: Mrudul Vajpayee <124863642+mrudulvajpayee4935@users.noreply.github.com>
+Date: Fri, 21 Nov 2025 00:43:55 +0530
+Subject: [PATCH] fix(connectors): [Adyen] Connector customer for mit (#10374)
+
+---
+ crates/api_models/src/payment_methods.rs      |   4 -
+ crates/diesel_models/src/payment_method.rs    |   2 +
+ .../src/connectors/adyen.rs                   |  15 ++
+ .../src/connectors/adyen/transformers.rs      |  36 +---
+ .../src/connectors/adyenplatform.rs           |  14 ++
+ .../adyenplatform/transformers/payouts.rs     |  44 +---
+ .../hyperswitch_domain_models/src/mandates.rs |   6 +
+ .../src/payment_methods.rs                    |  42 ++++
+ crates/hyperswitch_interfaces/src/api.rs      |  20 ++
+ .../src/connector_integration_interface.rs    |  25 +++
+ .../src/core/payment_methods/migration.rs     | 197 +++++++++---------
+ crates/router/src/core/payments.rs            |  11 +-
+ .../router/src/core/payments/tokenization.rs  |   4 +
+ .../router/src/core/payments/transformers.rs  |  14 +-
+ crates/router/src/core/payouts.rs             |   1 +
+ crates/router/src/core/utils.rs               |  88 +++++++-
+ 16 files changed, 354 insertions(+), 169 deletions(-)
+
+diff --git a/crates/api_models/src/payment_methods.rs b/crates/api_models/src/payment_methods.rs
+index 57bc93310c9..9f3cf2c422b 100644
+--- a/crates/api_models/src/payment_methods.rs
++++ b/crates/api_models/src/payment_methods.rs
+@@ -295,7 +295,6 @@ pub struct PaymentMethodRecordUpdateResponse {
+     pub network_transaction_id: Option<String>,
+     pub connector_mandate_details: Option<pii::SecretSerdeValue>,
+     pub updated_payment_method_data: Option<bool>,
+-    pub connector_customer: Option<pii::SecretSerdeValue>,
+ }
+ 
+ #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+@@ -2816,7 +2815,6 @@ pub struct PaymentMethodUpdateResponse {
+     #[serde(skip_serializing_if = "Option::is_none")]
+     pub update_error: Option<String>,
+     pub updated_payment_method_data: Option<bool>,
+-    pub connector_customer: Option<pii::SecretSerdeValue>,
+     pub line_number: Option<i64>,
+ }
+ 
+@@ -2958,7 +2956,6 @@ impl From<PaymentMethodUpdateResponseType> for PaymentMethodUpdateResponse {
+                 network_transaction_id: res.network_transaction_id,
+                 connector_mandate_details: res.connector_mandate_details,
+                 updated_payment_method_data: res.updated_payment_method_data,
+-                connector_customer: res.connector_customer,
+                 update_status: UpdateStatus::Success,
+                 update_error: None,
+                 line_number: record.line_number,
+@@ -2969,7 +2966,6 @@ impl From<PaymentMethodUpdateResponseType> for PaymentMethodUpdateResponse {
+                 network_transaction_id: record.network_transaction_id,
+                 connector_mandate_details: None,
+                 updated_payment_method_data: None,
+-                connector_customer: None,
+                 update_status: UpdateStatus::Failed,
+                 update_error: Some(e),
+                 line_number: record.line_number,
+diff --git a/crates/diesel_models/src/payment_method.rs b/crates/diesel_models/src/payment_method.rs
+index edadeea7990..a898fdef308 100644
+--- a/crates/diesel_models/src/payment_method.rs
++++ b/crates/diesel_models/src/payment_method.rs
+@@ -965,6 +965,7 @@ pub struct PaymentsMandateReferenceRecord {
+     pub mandate_metadata: Option<pii::SecretSerdeValue>,
+     pub connector_mandate_status: Option<common_enums::ConnectorMandateStatus>,
+     pub connector_mandate_request_reference_id: Option<String>,
++    pub connector_customer_id: Option<String>,
+ }
+ 
+ #[cfg(feature = "v2")]
+@@ -1036,6 +1037,7 @@ common_utils::impl_to_sql_from_sql_json!(PaymentsTokenReference);
+ #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+ pub struct PayoutsMandateReferenceRecord {
+     pub transfer_method_id: Option<String>,
++    pub connector_customer_id: Option<String>,
+ }
+ 
+ #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, diesel::AsExpression)]
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyen.rs b/crates/hyperswitch_connectors/src/connectors/adyen.rs
+index 2c24f921084..ea85e2426a5 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyen.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyen.rs
+@@ -3340,4 +3340,19 @@ impl ConnectorSpecifications for Adyen {
+     fn get_supported_webhook_flows(&self) -> Option<&'static [enums::EventClass]> {
+         Some(ADYEN_SUPPORTED_WEBHOOK_FLOWS)
+     }
++
++    #[cfg(feature = "v1")]
++    fn generate_connector_customer_id(
++        &self,
++        customer_id: &Option<common_utils::id_type::CustomerId>,
++        merchant_id: &common_utils::id_type::MerchantId,
++    ) -> Option<String> {
++        customer_id.as_ref().map(|cid| {
++            format!(
++                "{}_{}",
++                merchant_id.get_string_repr(),
++                cid.get_string_repr()
++            )
++        })
++    }
+ }
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+index a5350ce9ccb..22dcb0304ce 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyen/transformers.rs
+@@ -1959,17 +1959,7 @@ fn get_shopper_statement(item: &PaymentsAuthorizeRouterData) -> Option<String> {
+ fn get_recurring_processing_model(
+     item: &PaymentsAuthorizeRouterData,
+ ) -> Result<RecurringDetails, Error> {
+-    let shopper_reference = match item.get_connector_customer_id() {
+-        Ok(connector_customer_id) => Some(connector_customer_id),
+-        Err(_) => {
+-            let customer_id = item.get_customer_id()?;
+-            Some(format!(
+-                "{}_{}",
+-                item.merchant_id.get_string_repr(),
+-                customer_id.get_string_repr()
+-            ))
+-        }
+-    };
++    let shopper_reference = item.get_connector_customer_id()?;
+ 
+     match (item.request.setup_future_usage, item.request.off_session) {
+         (Some(storage_enums::FutureUsage::OffSession), _) => {
+@@ -1977,13 +1967,13 @@ fn get_recurring_processing_model(
+             Ok((
+                 Some(AdyenRecurringModel::UnscheduledCardOnFile),
+                 Some(store_payment_method),
+-                shopper_reference,
++                Some(shopper_reference),
+             ))
+         }
+         (_, Some(true)) => Ok((
+             Some(AdyenRecurringModel::UnscheduledCardOnFile),
+             None,
+-            shopper_reference,
++            Some(shopper_reference),
+         )),
+         _ => Ok((None, None, None)),
+     }
+@@ -2158,20 +2148,6 @@ fn get_social_security_number(voucher_data: &VoucherData) -> Option<Secret<Strin
+     }
+ }
+ 
+-fn build_shopper_reference(item: &PaymentsAuthorizeRouterData) -> Option<String> {
+-    match item.get_connector_customer_id() {
+-        Ok(connector_customer_id) => Some(connector_customer_id),
+-        Err(_) => match item.get_customer_id() {
+-            Ok(customer_id) => Some(format!(
+-                "{}_{}",
+-                item.merchant_id.get_string_repr(),
+-                customer_id.get_string_repr()
+-            )),
+-            Err(_) => None,
+-        },
+-    }
+-}
+-
+ impl TryFrom<(&BankDebitData, &PaymentsAuthorizeRouterData)> for AdyenPaymentMethod<'_> {
+     type Error = Error;
+     fn try_from(
+@@ -3156,7 +3132,7 @@ impl TryFrom<(&AdyenRouterData<&PaymentsAuthorizeRouterData>, &Card)> for AdyenP
+         let amount = get_amount_data(item);
+         let auth_type = AdyenAuthType::try_from(&item.router_data.connector_auth_type)?;
+         let shopper_interaction = AdyenShopperInteraction::from(item.router_data);
+-        let shopper_reference = build_shopper_reference(item.router_data);
++        let shopper_reference = item.router_data.get_connector_customer_id().ok();
+         let (recurring_processing_model, store_payment_method, _) =
+             get_recurring_processing_model(item.router_data)?;
+         let browser_info = get_browser_info(item.router_data)?;
+@@ -3912,7 +3888,7 @@ impl
+         let additional_data = get_additional_data(item.router_data);
+         let country_code = get_country_code(item.router_data.get_optional_billing());
+         let shopper_interaction = AdyenShopperInteraction::from(item.router_data);
+-        let shopper_reference = build_shopper_reference(item.router_data);
++        let shopper_reference = item.router_data.get_connector_customer_id().ok();
+         let (recurring_processing_model, store_payment_method, _) =
+             get_recurring_processing_model(item.router_data)?;
+         let return_url = item.router_data.request.get_router_return_url()?;
+@@ -6532,7 +6508,7 @@ impl
+         let amount = get_amount_data(item);
+         let auth_type = AdyenAuthType::try_from(&item.router_data.connector_auth_type)?;
+         let shopper_interaction = AdyenShopperInteraction::from(item.router_data);
+-        let shopper_reference = build_shopper_reference(item.router_data);
++        let shopper_reference = item.router_data.get_connector_customer_id().ok();
+         let (recurring_processing_model, store_payment_method, _) =
+             get_recurring_processing_model(item.router_data)?;
+         let browser_info = get_browser_info(item.router_data)?;
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs b/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs
+index 92802dcdc5a..18f67d52728 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyenplatform.rs
+@@ -486,4 +486,18 @@ impl ConnectorSpecifications for Adyenplatform {
+     fn get_supported_webhook_flows(&self) -> Option<&'static [common_enums::enums::EventClass]> {
+         None
+     }
++    #[cfg(feature = "v1")]
++    fn generate_connector_customer_id(
++        &self,
++        customer_id: &Option<common_utils::id_type::CustomerId>,
++        merchant_id: &common_utils::id_type::MerchantId,
++    ) -> Option<String> {
++        customer_id.as_ref().map(|cid| {
++            format!(
++                "{}_{}",
++                merchant_id.get_string_repr(),
++                cid.get_string_repr()
++            )
++        })
++    }
+ }
+diff --git a/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs b/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
+index 14053608e8d..7157cf947f8 100644
+--- a/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
++++ b/crates/hyperswitch_connectors/src/connectors/adyenplatform/transformers/payouts.rs
+@@ -295,17 +295,7 @@ impl<F> TryFrom<(&PayoutsRouterData<F>, &payouts::CardPayout)> for AdyenAccountH
+             .into());
+         };
+ 
+-        let customer_id_reference = match router_data.get_connector_customer_id() {
+-            Ok(connector_customer_id) => connector_customer_id,
+-            Err(_) => {
+-                let customer_id = router_data.get_customer_id()?;
+-                format!(
+-                    "{}_{}",
+-                    router_data.merchant_id.get_string_repr(),
+-                    customer_id.get_string_repr()
+-                )
+-            }
+-        };
++        let customer_id_reference = router_data.get_connector_customer_id()?;
+ 
+         Ok(Self {
+             address: Some(address),
+@@ -336,17 +326,7 @@ impl<F> TryFrom<(&PayoutsRouterData<F>, &payouts::Bank)> for AdyenAccountHolder
+ 
+         let full_name = router_data.get_billing_full_name()?;
+ 
+-        let customer_id_reference = match router_data.get_connector_customer_id() {
+-            Ok(connector_customer_id) => connector_customer_id,
+-            Err(_) => {
+-                let customer_id = router_data.get_customer_id()?;
+-                format!(
+-                    "{}_{}",
+-                    router_data.merchant_id.get_string_repr(),
+-                    customer_id.get_string_repr()
+-                )
+-            }
+-        };
++        let customer_id_reference = router_data.get_connector_customer_id()?;
+ 
+         Ok(Self {
+             address: Some(address),
+@@ -391,22 +371,10 @@ impl<F> TryFrom<StoredPaymentCounterparty<'_, F>>
+                     })?
+                     .try_into()?;
+ 
+-                let customer_id_reference =
+-                    match stored_payment.item.router_data.get_connector_customer_id() {
+-                        Ok(connector_customer_id) => connector_customer_id,
+-                        Err(_) => {
+-                            let customer_id = stored_payment.item.router_data.get_customer_id()?;
+-                            format!(
+-                                "{}_{}",
+-                                stored_payment
+-                                    .item
+-                                    .router_data
+-                                    .merchant_id
+-                                    .get_string_repr(),
+-                                customer_id.get_string_repr()
+-                            )
+-                        }
+-                    };
++                let customer_id_reference = stored_payment
++                    .item
++                    .router_data
++                    .get_connector_customer_id()?;
+ 
+                 let card_holder = AdyenAccountHolder {
+                     address: Some(address),
+diff --git a/crates/hyperswitch_domain_models/src/mandates.rs b/crates/hyperswitch_domain_models/src/mandates.rs
+index ecfd7f34694..4260b7d8b58 100644
+--- a/crates/hyperswitch_domain_models/src/mandates.rs
++++ b/crates/hyperswitch_domain_models/src/mandates.rs
+@@ -174,6 +174,7 @@ pub struct PaymentsMandateReferenceRecord {
+     pub mandate_metadata: Option<pii::SecretSerdeValue>,
+     pub connector_mandate_status: Option<common_enums::ConnectorMandateStatus>,
+     pub connector_mandate_request_reference_id: Option<String>,
++    pub connector_customer_id: Option<String>,
+ }
+ 
+ #[cfg(feature = "v1")]
+@@ -205,6 +206,7 @@ pub struct ConnectorTokenReferenceRecord {
+ #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+ pub struct PayoutsMandateReferenceRecord {
+     pub transfer_method_id: Option<String>,
++    pub connector_customer_id: Option<String>,
+ }
+ 
+ #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+@@ -428,6 +430,7 @@ impl From<diesel_models::PayoutsMandateReferenceRecord> for PayoutsMandateRefere
+     fn from(value: diesel_models::PayoutsMandateReferenceRecord) -> Self {
+         Self {
+             transfer_method_id: value.transfer_method_id,
++            connector_customer_id: value.connector_customer_id,
+         }
+     }
+ }
+@@ -436,6 +439,7 @@ impl From<PayoutsMandateReferenceRecord> for diesel_models::PayoutsMandateRefere
+     fn from(value: PayoutsMandateReferenceRecord) -> Self {
+         Self {
+             transfer_method_id: value.transfer_method_id,
++            connector_customer_id: value.connector_customer_id,
+         }
+     }
+ }
+@@ -475,6 +479,7 @@ impl From<diesel_models::PaymentsMandateReferenceRecord> for PaymentsMandateRefe
+             mandate_metadata: value.mandate_metadata,
+             connector_mandate_status: value.connector_mandate_status,
+             connector_mandate_request_reference_id: value.connector_mandate_request_reference_id,
++            connector_customer_id: value.connector_customer_id,
+         }
+     }
+ }
+@@ -514,6 +519,7 @@ impl From<PaymentsMandateReferenceRecord> for diesel_models::PaymentsMandateRefe
+             mandate_metadata: value.mandate_metadata,
+             connector_mandate_status: value.connector_mandate_status,
+             connector_mandate_request_reference_id: value.connector_mandate_request_reference_id,
++            connector_customer_id: value.connector_customer_id,
+         }
+     }
+ }
+diff --git a/crates/hyperswitch_domain_models/src/payment_methods.rs b/crates/hyperswitch_domain_models/src/payment_methods.rs
+index 2a786616fae..b5f5ddae568 100644
+--- a/crates/hyperswitch_domain_models/src/payment_methods.rs
++++ b/crates/hyperswitch_domain_models/src/payment_methods.rs
+@@ -243,6 +243,48 @@ impl PaymentMethod {
+         }
+     }
+ 
++    #[cfg(feature = "v1")]
++    pub fn get_payment_connector_customer_id(
++        &self,
++        merchant_connector_account_id: id_type::MerchantConnectorAccountId,
++    ) -> Result<Option<String>, ParsingError> {
++        let common_mandate_reference = self.get_common_mandate_reference()?;
++        Ok(common_mandate_reference
++            .payments
++            .as_ref()
++            .and_then(|payments| payments.get(&merchant_connector_account_id))
++            .and_then(|record| record.connector_customer_id.clone()))
++    }
++
++    #[cfg(feature = "v2")]
++    pub fn get_payment_connector_customer_id(
++        &self,
++        merchant_connector_account_id: id_type::MerchantConnectorAccountId,
++    ) -> Result<Option<String>, ParsingError> {
++        todo!()
++    }
++
++    #[cfg(feature = "v1")]
++    pub fn get_payout_connector_customer_id(
++        &self,
++        merchant_connector_account_id: id_type::MerchantConnectorAccountId,
++    ) -> Result<Option<String>, ParsingError> {
++        let common_mandate_reference = self.get_common_mandate_reference()?;
++        Ok(common_mandate_reference
++            .payouts
++            .as_ref()
++            .and_then(|payouts| payouts.get(&merchant_connector_account_id))
++            .and_then(|record| record.connector_customer_id.clone()))
++    }
++
++    #[cfg(feature = "v2")]
++    pub fn get_payout_connector_customer_id(
++        &self,
++        merchant_connector_account_id: id_type::MerchantConnectorAccountId,
++    ) -> Result<Option<String>, ParsingError> {
++        todo!()
++    }
++
+     #[cfg(feature = "v2")]
+     pub fn set_payment_method_type(&mut self, payment_method_type: common_enums::PaymentMethod) {
+         self.payment_method_type = Some(payment_method_type);
+diff --git a/crates/hyperswitch_interfaces/src/api.rs b/crates/hyperswitch_interfaces/src/api.rs
+index 950ae964c25..738f27d03b1 100644
+--- a/crates/hyperswitch_interfaces/src/api.rs
++++ b/crates/hyperswitch_interfaces/src/api.rs
+@@ -540,6 +540,26 @@ pub trait ConnectorSpecifications {
+             .unwrap_or_else(|| payment_attempt.id.get_string_repr().to_owned())
+     }
+ 
++    #[cfg(feature = "v1")]
++    /// Generate connector customer reference ID for payments
++    fn generate_connector_customer_id(
++        &self,
++        _customer_id: &Option<common_utils::id_type::CustomerId>,
++        _merchant_id: &common_utils::id_type::MerchantId,
++    ) -> Option<String> {
++        None
++    }
++
++    #[cfg(feature = "v2")]
++    /// Generate connector customer reference ID for payments
++    fn generate_connector_customer_id(
++        &self,
++        _customer_id: &Option<common_utils::id_type::CustomerId>,
++        _merchant_id: &common_utils::id_type::MerchantId,
++    ) -> Option<String> {
++        todo!()
++    }
++
+     /// Check if connector needs tokenization call before setup mandate flow
+     fn should_call_tokenization_before_setup_mandate(&self) -> bool {
+         true
+diff --git a/crates/hyperswitch_interfaces/src/connector_integration_interface.rs b/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
+index ce69ebe276b..82efc039cb0 100644
+--- a/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
++++ b/crates/hyperswitch_interfaces/src/connector_integration_interface.rs
+@@ -674,6 +674,31 @@ impl ConnectorSpecifications for ConnectorEnum {
+         }
+     }
+ 
++    #[cfg(feature = "v1")]
++    fn generate_connector_customer_id(
++        &self,
++        customer_id: &Option<common_utils::id_type::CustomerId>,
++        merchant_id: &common_utils::id_type::MerchantId,
++    ) -> Option<String> {
++        match self {
++            Self::Old(connector) => {
++                connector.generate_connector_customer_id(customer_id, merchant_id)
++            }
++            Self::New(connector) => {
++                connector.generate_connector_customer_id(customer_id, merchant_id)
++            }
++        }
++    }
++
++    #[cfg(feature = "v2")]
++    fn generate_connector_customer_id(
++        &self,
++        customer_id: &Option<common_utils::id_type::CustomerId>,
++        merchant_id: &common_utils::id_type::MerchantId,
++    ) -> Option<String> {
++        todo!()
++    }
++
+     /// Check if connector requires create customer call
+     fn should_call_connector_customer(
+         &self,
+diff --git a/crates/router/src/core/payment_methods/migration.rs b/crates/router/src/core/payment_methods/migration.rs
+index ccd3568a2b7..3954f2fd8ae 100644
+--- a/crates/router/src/core/payment_methods/migration.rs
++++ b/crates/router/src/core/payment_methods/migration.rs
+@@ -150,29 +150,13 @@ pub async fn update_payment_method_record(
+         None
+     };
+ 
+-    let (customer, updated_customer) = match (&req.connector_customer_id, &mca_data_cache) {
+-        (Some(connector_customer_id), Some(cache)) => {
+-            let customer = db
+-                .find_customer_by_customer_id_merchant_id(
+-                    &state.into(),
+-                    &payment_method.customer_id,
+-                    merchant_id,
+-                    merchant_context.get_merchant_key_store(),
+-                    merchant_context.get_merchant_account().storage_scheme,
+-                )
+-                .await
+-                .to_not_found_response(errors::ApiErrorResponse::CustomerNotFound)?;
+-
+-            let customer_update =
+-                build_connector_customer_update(&customer, connector_customer_id, cache)?;
+-
+-            (Some(customer), Some(customer_update))
+-        }
+-        _ => (None, None),
+-    };
+-
+-    let pm_update = match (&req.payment_instrument_id, &mca_data_cache) {
+-        (Some(payment_instrument_id), Some(cache)) => {
++    let pm_update = match (
++        &req.payment_instrument_id,
++        &req.connector_customer_id,
++        &mca_data_cache,
++    ) {
++        // Case: payment_instrument_id (with or without connector_customer_id)
++        (Some(payment_instrument_id), _, Some(cache)) => {
+             let mandate_details = payment_method
+                 .get_common_mandate_reference()
+                 .change_context(errors::ApiErrorResponse::InternalServerError)
+@@ -192,6 +176,7 @@ pub async fn update_payment_method_record(
+                     enums::ConnectorType::PayoutProcessor => {
+                         let new_payout_record = PayoutsMandateReferenceRecord {
+                             transfer_method_id: Some(payment_instrument_id.peek().to_string()),
++                            connector_customer_id: req.connector_customer_id.clone(),
+                         };
+ 
+                         if let Some(existing_record) =
+@@ -202,6 +187,11 @@ pub async fn update_payment_method_record(
+                                 existing_record.transfer_method_id =
+                                     Some(transfer_method_id.clone());
+                             }
++                            // Update connector_customer_id if provided
++                            if req.connector_customer_id.is_some() {
++                                existing_record.connector_customer_id =
++                                    req.connector_customer_id.clone();
++                            }
+                         } else {
+                             existing_payouts_mandate
+                                 .0
+@@ -214,6 +204,11 @@ pub async fn update_payment_method_record(
+                         {
+                             existing_record.connector_mandate_id =
+                                 payment_instrument_id.peek().to_string();
++                            // Update connector_customer_id if provided
++                            if req.connector_customer_id.is_some() {
++                                existing_record.connector_customer_id =
++                                    req.connector_customer_id.clone();
++                            }
+                         } else {
+                             existing_payments_mandate.0.insert(
+                                 merchant_connector_id.clone(),
+@@ -225,6 +220,7 @@ pub async fn update_payment_method_record(
+                                     mandate_metadata: None,
+                                     connector_mandate_status: None,
+                                     connector_mandate_request_reference_id: None,
++                                    connector_customer_id: req.connector_customer_id.clone(),
+                                 },
+                             );
+                         }
+@@ -261,6 +257,91 @@ pub async fn update_payment_method_record(
+                 payment_method_data: updated_payment_method_data.clone(),
+             }
+         }
++        // Case: Only connector_customer_id provided
++        (None, Some(connector_customer_id), Some(cache)) => {
++            let mandate_details = payment_method
++                .get_common_mandate_reference()
++                .change_context(errors::ApiErrorResponse::InternalServerError)
++                .attach_printable("Failed to deserialize to Payment Mandate Reference ")?;
++
++            // Error if no mandate details exist
++            if mandate_details.payments.is_none() && mandate_details.payouts.is_none() {
++                return Err(errors::ApiErrorResponse::InvalidRequestData {
++                    message: "connector_mandate_details does not exist".to_string(),
++                }
++                .into());
++            }
++
++            let mut existing_payments_mandate = mandate_details
++                .payments
++                .clone()
++                .unwrap_or(PaymentsMandateReference(HashMap::new()));
++            let mut existing_payouts_mandate = mandate_details
++                .payouts
++                .clone()
++                .unwrap_or(PayoutsMandateReference(HashMap::new()));
++
++            // For each merchant_connector_id, check appropriate reference based on connector_type
++            for (merchant_connector_id, mca) in cache.iter() {
++                match mca.connector_type {
++                    enums::ConnectorType::PayoutProcessor => {
++                        // Check if exists in payouts mandate
++                        if let Some(existing_record) =
++                            existing_payouts_mandate.0.get_mut(merchant_connector_id)
++                        {
++                            existing_record.connector_customer_id =
++                                Some(connector_customer_id.clone());
++                        } else {
++                            return Err(errors::ApiErrorResponse::InvalidRequestData {
++                                message: format!("merchant_connector_id {} does not exist in payouts connector_mandate_details", merchant_connector_id.get_string_repr()),
++                            }.into());
++                        }
++                    }
++                    _ => {
++                        // Check if exists in payments mandate
++                        if let Some(existing_record) =
++                            existing_payments_mandate.0.get_mut(merchant_connector_id)
++                        {
++                            existing_record.connector_customer_id =
++                                Some(connector_customer_id.clone());
++                        } else {
++                            return Err(errors::ApiErrorResponse::InvalidRequestData {
++                                message: format!("merchant_connector_id {} does not exist in payments connector_mandate_details", merchant_connector_id.get_string_repr()),
++                            }.into());
++                        }
++                    }
++                }
++            }
++
++            let updated_connector_mandate_details = CommonMandateReference {
++                payments: if !existing_payments_mandate.0.is_empty() {
++                    Some(existing_payments_mandate)
++                } else {
++                    mandate_details.payments
++                },
++                payouts: if !existing_payouts_mandate.0.is_empty() {
++                    Some(existing_payouts_mandate)
++                } else {
++                    mandate_details.payouts
++                },
++            };
++
++            let connector_mandate_details_value = updated_connector_mandate_details
++                .get_mandate_details_value()
++                .map_err(|err| {
++                    logger::error!("Failed to get get_mandate_details_value : {:?}", err);
++                    errors::ApiErrorResponse::MandateUpdateFailed
++                })?;
++
++            PaymentMethodUpdate::PaymentMethodBatchUpdate {
++                connector_mandate_details: Some(pii::SecretSerdeValue::new(
++                    connector_mandate_details_value,
++                )),
++                network_transaction_id,
++                status,
++                payment_method_data: updated_payment_method_data.clone(),
++            }
++        }
+         _ => {
+             if updated_payment_method_data.is_some() {
+                 PaymentMethodUpdate::PaymentMethodDataUpdate {
+@@ -289,27 +370,6 @@ pub async fn update_payment_method_record(
+             "Failed to update payment method for existing pm_id: {payment_method_id:?} in db",
+         ))?;
+ 
+-    let connector_customer_response =
+-        if let (Some(customer_data), Some(customer_update)) = (customer, updated_customer) {
+-            let updated_customer = db
+-                .update_customer_by_customer_id_merchant_id(
+-                    &state.into(),
+-                    response.customer_id.clone(),
+-                    merchant_id.clone(),
+-                    customer_data,
+-                    customer_update,
+-                    merchant_context.get_merchant_key_store(),
+-                    merchant_context.get_merchant_account().storage_scheme,
+-                )
+-                .await
+-                .change_context(errors::ApiErrorResponse::InternalServerError)
+-                .attach_printable("Failed to update customer connector data")?;
+-
+-            updated_customer.connector_customer
+-        } else {
+-            None
+-        };
+-
+     Ok(ApplicationResponse::Json(
+         pm_api::PaymentMethodRecordUpdateResponse {
+             payment_method_id: response.payment_method_id,
+@@ -319,7 +379,6 @@ pub async fn update_payment_method_record(
+                 .connector_mandate_details
+                 .map(pii::SecretSerdeValue::new),
+             updated_payment_method_data: Some(updated_card_expiry),
+-            connector_customer: connector_customer_response,
+         },
+     ))
+ }
+@@ -358,51 +417,3 @@ impl PaymentMethodsUpdateForm {
+         Ok((self.merchant_id.clone(), records))
+     }
+ }
+-
+-#[cfg(feature = "v1")]
+-fn build_connector_customer_update(
+-    customer: &hyperswitch_domain_models::customer::Customer,
+-    connector_customer_id: &str,
+-    mca_cache: &std::collections::HashMap<
+-        id_type::MerchantConnectorAccountId,
+-        hyperswitch_domain_models::merchant_connector_account::MerchantConnectorAccount,
+-    >,
+-) -> CustomResult<hyperswitch_domain_models::customer::CustomerUpdate, errors::ApiErrorResponse> {
+-    use common_enums::enums;
+-    use common_utils::pii;
+-
+-    let mut updated_connector_customer_data: std::collections::HashMap<String, serde_json::Value> =
+-        customer
+-            .connector_customer
+-            .as_ref()
+-            .and_then(|cc| serde_json::from_value(cc.peek().clone()).ok())
+-            .unwrap_or_default();
+-
+-    for (_, mca) in mca_cache.iter() {
+-        let key = match mca.connector_type {
+-            enums::ConnectorType::PayoutProcessor => {
+-                format!(
+-                    "{}_{}",
+-                    mca.profile_id.get_string_repr(),
+-                    mca.connector_name
+-                )
+-            }
+-            _ => mca.merchant_connector_id.get_string_repr().to_string(),
+-        };
+-
+-        updated_connector_customer_data.insert(
+-            key,
+-            serde_json::Value::String(connector_customer_id.to_string()),
+-        );
+-    }
+-
+-    Ok(
+-        hyperswitch_domain_models::customer::CustomerUpdate::ConnectorCustomer {
+-            connector_customer: Some(pii::SecretSerdeValue::new(
+-                serde_json::to_value(updated_connector_customer_data)
+-                    .change_context(errors::ApiErrorResponse::InternalServerError)
+-                    .attach_printable("Failed to serialize connector customer data")?,
+-            )),
+-        },
+-    )
+-}
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index 2b2099f4297..7eba41f238f 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -4051,7 +4051,16 @@ where
+     .await?;
+ 
+     #[cfg(feature = "v1")]
+-    if let Some(connector_customer_id) = payment_data.get_connector_customer_id() {
++    if let Some(connector_customer_id) = {
++        core_utils::get_connector_customer_id(
++            &state.conf,
++            &connector.connector_name.to_string(),
++            payment_data.get_connector_customer_id(),
++            &payment_data.get_payment_intent().customer_id,
++            &payment_data.get_payment_method_info().cloned(),
++            payment_data.get_payment_attempt(),
++        )?
++    } {
+         router_data.connector_customer = Some(connector_customer_id);
+     }
+ 
+diff --git a/crates/router/src/core/payments/tokenization.rs b/crates/router/src/core/payments/tokenization.rs
+index 2c9371450d0..6bf68a8df72 100644
+--- a/crates/router/src/core/payments/tokenization.rs
++++ b/crates/router/src/core/payments/tokenization.rs
+@@ -1556,6 +1556,7 @@ pub fn add_connector_mandate_details_in_payment_method(
+                 mandate_metadata,
+                 connector_mandate_status: Some(ConnectorMandateStatus::Active),
+                 connector_mandate_request_reference_id,
++                connector_customer_id: None,
+             },
+         );
+         Some(CommonMandateReference {
+@@ -1596,6 +1597,7 @@ pub fn update_connector_mandate_details(
+                     connector_mandate_status: Some(ConnectorMandateStatus::Active),
+                     connector_mandate_request_reference_id: connector_mandate_request_reference_id
+                         .clone(),
++                    connector_customer_id: None,
+                 };
+ 
+                 payment_mandate_reference
+@@ -1609,6 +1611,7 @@ pub fn update_connector_mandate_details(
+                         mandate_metadata: mandate_metadata.clone(),
+                         connector_mandate_status: Some(ConnectorMandateStatus::Active),
+                         connector_mandate_request_reference_id,
++                        connector_customer_id: None,
+                     });
+ 
+                 let payout_data = mandate_details.and_then(|common_mandate| common_mandate.payouts);
+@@ -1654,6 +1657,7 @@ pub fn update_connector_mandate_details_status(
+                     connector_mandate_request_reference_id: pm
+                         .connector_mandate_request_reference_id
+                         .clone(),
++                    connector_customer_id: None,
+                 };
+                 *pm = update_rec
+             });
+diff --git a/crates/router/src/core/payments/transformers.rs b/crates/router/src/core/payments/transformers.rs
+index 105bc9bd2c1..a2cc3dfb233 100644
+--- a/crates/router/src/core/payments/transformers.rs
++++ b/crates/router/src/core/payments/transformers.rs
+@@ -1870,11 +1870,21 @@ where
+         access_token: None,
+         session_token: None,
+         reference_id: None,
+-        payment_method_status: payment_data.payment_method_info.map(|info| info.status),
++        payment_method_status: payment_data
++            .payment_method_info
++            .clone()
++            .map(|info| info.status),
+         payment_method_token: payment_data
+             .pm_token
+             .map(|token| types::PaymentMethodToken::Token(Secret::new(token))),
+-        connector_customer: payment_data.connector_customer_id,
++        connector_customer: core_utils::get_connector_customer_id(
++            &state.conf,
++            connector_id,
++            payment_data.connector_customer_id.clone(),
++            &payment_data.payment_intent.customer_id,
++            &payment_data.payment_method_info,
++            &payment_data.payment_attempt,
++        )?,
+         recurring_mandate_payment_data: payment_data.recurring_mandate_payment_data,
+         connector_request_reference_id: core_utils::get_connector_request_reference_id(
+             &state.conf,
+diff --git a/crates/router/src/core/payouts.rs b/crates/router/src/core/payouts.rs
+index d937f2fd121..a9a30f9968d 100644
+--- a/crates/router/src/core/payouts.rs
++++ b/crates/router/src/core/payouts.rs
+@@ -2154,6 +2154,7 @@ pub async fn create_recipient_disburse_account(
+                     merchant_connector_id.clone(),
+                     PayoutsMandateReferenceRecord {
+                         transfer_method_id: Some(connector_payout_id),
++                        connector_customer_id: None,
+                     },
+                 )]);
+ 
+diff --git a/crates/router/src/core/utils.rs b/crates/router/src/core/utils.rs
+index 1d9275c25a1..6724d76d98a 100644
+--- a/crates/router/src/core/utils.rs
++++ b/crates/router/src/core/utils.rs
+@@ -156,7 +156,13 @@ pub async fn construct_payout_router_data<'a, F>(
+         merchant_id: merchant_context.get_merchant_account().get_id().to_owned(),
+         customer_id: customer_details.to_owned().map(|c| c.customer_id),
+         tenant_id: state.tenant.tenant_id.clone(),
+-        connector_customer: connector_customer_id,
++        connector_customer: get_payout_connector_customer_id(
++            connector_data,
++            connector_customer_id.clone(),
++            &customer_details.to_owned().map(|c| c.customer_id),
++            &payout_data.payment_method,
++            &payout_data.payout_attempt,
++        )?,
+         connector: connector_name.to_string(),
+         payment_id: common_utils::id_type::PaymentId::get_irrelevant_id("payout")
+             .get_string_repr()
+@@ -1841,6 +1847,86 @@ pub fn get_connector_request_reference_id(
+     todo!()
+ }
+ 
++#[cfg(feature = "v1")]
++pub fn get_connector_customer_id(
++    conf: &Settings,
++    connector_name: &str,
++    connector_customer_id: Option<String>,
++    customer_id: &Option<common_utils::id_type::CustomerId>,
++    payment_method_info: &Option<hyperswitch_domain_models::payment_methods::PaymentMethod>,
++    payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
++) -> CustomResult<Option<String>, errors::ApiErrorResponse> {
++    let connector_data = api::ConnectorData::get_connector_by_name(
++        &conf.connectors,
++        connector_name,
++        api::GetToken::Connector,
++        payment_attempt.merchant_connector_id.clone(),
++    )
++    .change_context(errors::ApiErrorResponse::InternalServerError)
++    .attach_printable("Failed to construct connector data")?;
++
++    let mandate_customer_id = payment_method_info
++        .as_ref()
++        .zip(payment_attempt.merchant_connector_id.as_ref())
++        .map(|(pm, mci)| pm.get_payment_connector_customer_id(mci.clone()))
++        .transpose()
++        .change_context(errors::ApiErrorResponse::InternalServerError)
++        .attach_printable("Failed to construct mandate reference")?
++        .flatten();
++
++    Ok(mandate_customer_id.or(connector_customer_id).or_else(|| {
++        connector_data
++            .connector
++            .generate_connector_customer_id(customer_id, &payment_attempt.merchant_id)
++    }))
++}
++
++#[cfg(feature = "v2")]
++pub fn get_connector_customer_id(
++    conf: &Settings,
++    connector_name: &str,
++    connector_customer_id: Option<String>,
++    customer_id: &Option<common_utils::id_type::CustomerId>,
++    payment_method_info: &Option<hyperswitch_domain_models::payment_methods::PaymentMethod>,
++    payment_attempt: &hyperswitch_domain_models::payments::payment_attempt::PaymentAttempt,
++) -> CustomResult<Option<String>, errors::ApiErrorResponse> {
++    todo!()
++}
++
++#[cfg(feature = "v1")]
++pub fn get_payout_connector_customer_id(
++    connector_data: &api::ConnectorData,
++    connector_customer_id: Option<String>,
++    customer_id: &Option<common_utils::id_type::CustomerId>,
++    payment_method_info: &Option<hyperswitch_domain_models::payment_methods::PaymentMethod>,
++    payout_attempt: &hyperswitch_domain_models::payouts::payout_attempt::PayoutAttempt,
++) -> CustomResult<Option<String>, errors::ApiErrorResponse> {
++    let mandate_customer_id = payment_method_info
++        .as_ref()
++        .zip(payout_attempt.merchant_connector_id.as_ref())
++        .map(|(pm, mci)| pm.get_payout_connector_customer_id(mci.clone()))
++        .transpose()
++        .change_context(errors::ApiErrorResponse::InternalServerError)
++        .attach_printable("Failed to construct mandate reference")?
++        .flatten();
++    Ok(mandate_customer_id.or(connector_customer_id).or_else(|| {
++        connector_data
++            .connector
++            .generate_connector_customer_id(customer_id, &payout_attempt.merchant_id)
++    }))
++}
++
++#[cfg(feature = "v2")]
++pub fn get_payout_connector_customer_id(
++    connector_data: &api::ConnectorData,
++    connector_customer_id: Option<String>,
++    customer_id: &Option<common_utils::id_type::CustomerId>,
++    payment_method_info: &Option<hyperswitch_domain_models::payment_methods::PaymentMethod>,
++    payout_attempt: &hyperswitch_domain_models::payouts::payout_attempt::PayoutAttempt,
++) -> Option<String> {
++    todo!()
++}
++
+ /// Validate whether the profile_id exists and is associated with the merchant_id
+ pub async fn validate_and_get_business_profile(
+     db: &dyn StorageInterface,

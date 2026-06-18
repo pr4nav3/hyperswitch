@@ -1,0 +1,437 @@
+From 599cd1148a7201a4b6e998665b99b539d7b92627 Mon Sep 17 00:00:00 2001
+From: Sagnik Mitra <83326850+ImSagnik007@users.noreply.github.com>
+Date: Fri, 10 Apr 2026 16:31:29 +0530
+Subject: [PATCH 1/2] fix(core): 3DS Setup Mandate Webhook Trigger Fix (#11771)
+
+---
+ .../hyperswitch_domain_models/src/payments.rs |  6 ++
+ crates/router/src/core/payments.rs            |  5 +-
+ crates/router/src/core/webhooks/incoming.rs   | 79 +++++++++++++------
+ 3 files changed, 65 insertions(+), 25 deletions(-)
+
+diff --git a/crates/hyperswitch_domain_models/src/payments.rs b/crates/hyperswitch_domain_models/src/payments.rs
+index 118e0347e0f..aea7950c05f 100644
+--- a/crates/hyperswitch_domain_models/src/payments.rs
++++ b/crates/hyperswitch_domain_models/src/payments.rs
+@@ -378,6 +378,12 @@ impl PaymentIntent {
+             Ok(())
+         }
+     }
++
++    #[cfg(feature = "v1")]
++    pub fn is_setup_mandate(&self) -> bool {
++        self.amount == MinorUnit::zero()
++            && self.setup_future_usage == Some(common_enums::FutureUsage::OffSession)
++    }
+ }
+ 
+ #[cfg(feature = "v2")]
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index 4b682afe4d6..cecc8302b44 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -3869,6 +3869,7 @@ impl PaymentRedirectFlow for PaymentAuthenticateCompleteAuthorize {
+             None,
+             &payment_intent
+                 .profile_id
++                .clone()
+                 .ok_or(errors::ApiErrorResponse::InternalServerError)
+                 .attach_printable("missing profile_id in payment_intent")?,
+             &payment_attempt
+@@ -3903,9 +3904,7 @@ impl PaymentRedirectFlow for PaymentAuthenticateCompleteAuthorize {
+                 }),
+                 ..Default::default()
+             };
+-            let is_setup_mandate = payment_intent.amount == MinorUnit::zero()
+-                && payment_intent.setup_future_usage
+-                    == Some(storage_enums::FutureUsage::OffSession);
++            let is_setup_mandate = payment_intent.is_setup_mandate();
+             if is_setup_mandate {
+                 Box::pin(payments_core::<
+                     api::SetupMandate,
+diff --git a/crates/router/src/core/webhooks/incoming.rs b/crates/router/src/core/webhooks/incoming.rs
+index 89209509d1f..a735e806a46 100644
+--- a/crates/router/src/core/webhooks/incoming.rs
++++ b/crates/router/src/core/webhooks/incoming.rs
+@@ -2423,34 +2423,69 @@ async fn external_authentication_incoming_webhook_flow(
+                     == Some(common_enums::DecoupledAuthenticationType::Challenge)
+                 && event_type == webhooks::IncomingWebhookEvent::ExternalAuthenticationARes
+             {
++                let payment_intent = state
++                    .store
++                    .find_payment_intent_by_payment_id_processor_merchant_id(
++                        &payment_id,
++                        platform.get_processor().get_account().get_id(),
++                        platform.get_processor().get_key_store(),
++                        platform.get_processor().get_account().storage_scheme,
++                    )
++                    .await
++                    .to_not_found_response(errors::ApiErrorResponse::PaymentNotFound)?;
+                 let payment_confirm_req = api::PaymentsRequest {
+                     payment_id: Some(api_models::payments::PaymentIdType::PaymentIntentId(
+-                        payment_id,
++                        payment_intent.payment_id.clone(),
+                     )),
+                     merchant_id: Some(platform.get_processor().get_account().get_id().clone()),
+                     ..Default::default()
+                 };
+-                let payments_response = Box::pin(payments::payments_core::<
+-                    api::Authorize,
+-                    api::PaymentsResponse,
+-                    _,
+-                    _,
+-                    _,
+-                    payments::PaymentData<api::Authorize>,
+-                >(
+-                    state.clone(),
+-                    req_state,
+-                    platform.clone(),
+-                    None,
+-                    payments::PaymentConfirm,
+-                    payment_confirm_req,
+-                    services::api::AuthFlow::Merchant,
+-                    payments::CallConnectorAction::Trigger,
+-                    None,
+-                    None,
+-                    HeaderPayload::with_source(enums::PaymentSource::ExternalAuthenticator),
+-                ))
+-                .await?;
++                let is_setup_mandate = payment_intent.is_setup_mandate();
++                let payments_response = if is_setup_mandate {
++                    Box::pin(payments::payments_core::<
++                        api::SetupMandate,
++                        api::PaymentsResponse,
++                        _,
++                        _,
++                        _,
++                        payments::PaymentData<api::SetupMandate>,
++                    >(
++                        state.clone(),
++                        req_state,
++                        platform.clone(),
++                        None,
++                        payments::PaymentConfirm,
++                        payment_confirm_req,
++                        services::api::AuthFlow::Merchant,
++                        payments::CallConnectorAction::Trigger,
++                        None,
++                        None,
++                        HeaderPayload::with_source(enums::PaymentSource::ExternalAuthenticator),
++                    ))
++                    .await?
++                } else {
++                    Box::pin(payments::payments_core::<
++                        api::Authorize,
++                        api::PaymentsResponse,
++                        _,
++                        _,
++                        _,
++                        payments::PaymentData<api::Authorize>,
++                    >(
++                        state.clone(),
++                        req_state,
++                        platform.clone(),
++                        None,
++                        payments::PaymentConfirm,
++                        payment_confirm_req,
++                        services::api::AuthFlow::Merchant,
++                        payments::CallConnectorAction::Trigger,
++                        None,
++                        None,
++                        HeaderPayload::with_source(enums::PaymentSource::ExternalAuthenticator),
++                    ))
++                    .await?
++                };
+                 match payments_response {
+                     services::ApplicationResponse::JsonWithHeaders((payments_response, _)) => {
+                         let payment_id = payments_response.payment_id.clone();
+
+From a2cff372510a8846206497106dca4097466516cc Mon Sep 17 00:00:00 2001
+From: Sanchith Hegde <22217505+SanchithHegde@users.noreply.github.com>
+Date: Wed, 29 Apr 2026 16:16:40 +0530
+Subject: [PATCH 2/2] chore: address Rust 1.95.0 clippy lints (#11917)
+
+---
+ crates/analytics/src/api_event/metrics/latency.rs   |  7 ++-----
+ crates/analytics/src/payments/accumulator.rs        |  2 +-
+ crates/analytics/src/refunds/accumulator.rs         |  5 +++--
+ crates/diesel_models/src/query/process_tracker.rs   |  9 +++++----
+ crates/euclid/src/dssa/state_machine.rs             |  4 +---
+ .../src/connectors/bankofamerica/transformers.rs    | 13 +++++--------
+ .../src/connectors/barclaycard/transformers.rs      | 13 +++++--------
+ .../src/connectors/wellsfargo/transformers.rs       | 13 +++++--------
+ crates/redis_interface/src/commands.rs              |  2 +-
+ crates/router/src/core/payment_methods/tokenize.rs  |  2 +-
+ crates/router/src/core/payments.rs                  |  4 ++--
+ crates/storage_impl/src/merchant_account.rs         |  4 ++--
+ crates/storage_impl/src/payments/payment_attempt.rs |  6 +++---
+ 13 files changed, 36 insertions(+), 48 deletions(-)
+
+diff --git a/crates/analytics/src/api_event/metrics/latency.rs b/crates/analytics/src/api_event/metrics/latency.rs
+index 03c1a226e44..4e46a280c5b 100644
+--- a/crates/analytics/src/api_event/metrics/latency.rs
++++ b/crates/analytics/src/api_event/metrics/latency.rs
+@@ -109,11 +109,8 @@ where
+                         )?,
+                     }),
+                     ApiEventMetricRow {
+-                        latency: if i.latency_count != 0 {
+-                            Some(i.latency_sum.unwrap_or(0) / i.latency_count)
+-                        } else {
+-                            None
+-                        },
++                        latency: Some(i.latency_sum.unwrap_or(0))
++                            .and_then(|sum| sum.checked_div(i.latency_count)),
+                         api_count: None,
+                         status_code_count: None,
+                         start_bucket: i.start_bucket,
+diff --git a/crates/analytics/src/payments/accumulator.rs b/crates/analytics/src/payments/accumulator.rs
+index 6d7dca22a30..2e8d8cb4a2c 100644
+--- a/crates/analytics/src/payments/accumulator.rs
++++ b/crates/analytics/src/payments/accumulator.rs
+@@ -125,7 +125,7 @@ impl PaymentDistributionAccumulator for ErrorDistributionAccumulator {
+         if self.error_vec.is_empty() {
+             None
+         } else {
+-            self.error_vec.sort_by(|a, b| b.count.cmp(&a.count));
++            self.error_vec.sort_by_key(|x| std::cmp::Reverse(x.count));
+             let mut res: Vec<ErrorResult> = Vec::new();
+             for val in self.error_vec.into_iter() {
+                 let perc = f64::from(u32::try_from(val.count).ok()?) * 100.0
+diff --git a/crates/analytics/src/refunds/accumulator.rs b/crates/analytics/src/refunds/accumulator.rs
+index 840d46bbab7..ad016b3bfdf 100644
+--- a/crates/analytics/src/refunds/accumulator.rs
++++ b/crates/analytics/src/refunds/accumulator.rs
+@@ -98,7 +98,8 @@ impl RefundDistributionAccumulator for RefundReasonDistributionAccumulator {
+         if self.refund_reason_vec.is_empty() {
+             None
+         } else {
+-            self.refund_reason_vec.sort_by(|a, b| b.count.cmp(&a.count));
++            self.refund_reason_vec
++                .sort_by_key(|x| std::cmp::Reverse(x.count));
+             let mut res: Vec<ReasonsResult> = Vec::new();
+             for val in self.refund_reason_vec.into_iter() {
+                 let perc = f64::from(u32::try_from(val.count).ok()?) * 100.0
+@@ -140,7 +141,7 @@ impl RefundDistributionAccumulator for RefundErrorMessageDistributionAccumulator
+             None
+         } else {
+             self.refund_error_message_vec
+-                .sort_by(|a, b| b.count.cmp(&a.count));
++                .sort_by_key(|x| std::cmp::Reverse(x.count));
+             let mut res: Vec<ErrorMessagesResult> = Vec::new();
+             for val in self.refund_error_message_vec.into_iter() {
+                 let perc = f64::from(u32::try_from(val.count).ok()?) * 100.0
+diff --git a/crates/diesel_models/src/query/process_tracker.rs b/crates/diesel_models/src/query/process_tracker.rs
+index 1abc8b0edd2..cedffbdea18 100644
+--- a/crates/diesel_models/src/query/process_tracker.rs
++++ b/crates/diesel_models/src/query/process_tracker.rs
+@@ -99,7 +99,7 @@ impl ProcessTracker {
+         runner: &str,
+         limit: usize,
+     ) -> StorageResult<Vec<Self>> {
+-        let mut x: Vec<Self> = generics::generic_filter::<
++        let mut processes: Vec<Self> = generics::generic_filter::<
+             <Self as HasTable>::Table,
+             _,
+             <<Self as HasTable>::Table as Table>::PrimaryKey,
+@@ -115,9 +115,10 @@ impl ProcessTracker {
+             None,
+         )
+         .await?;
+-        x.sort_by(|a, b| a.schedule_time.cmp(&b.schedule_time));
+-        x.truncate(limit);
+-        Ok(x)
++        processes.sort_by_key(|x| x.schedule_time);
++        processes.truncate(limit);
++
++        Ok(processes)
+     }
+ 
+     #[instrument(skip(conn))]
+diff --git a/crates/euclid/src/dssa/state_machine.rs b/crates/euclid/src/dssa/state_machine.rs
+index ea954db5cdf..18dd4a43349 100644
+--- a/crates/euclid/src/dssa/state_machine.rs
++++ b/crates/euclid/src/dssa/state_machine.rs
+@@ -87,8 +87,7 @@ impl<'a> ConditionStateMachine<'a> {
+     fn new(condition: &'a [dir::DirComparison], start_idx: usize) -> Self {
+         let mut machines = Vec::<ComparisonStateMachine<'a>>::with_capacity(condition.len());
+ 
+-        let mut machine_idx = start_idx;
+-        for cond in condition {
++        for (machine_idx, cond) in (start_idx..).zip(condition.iter()) {
+             let machine = ComparisonStateMachine {
+                 values: &cond.values,
+                 logic: &cond.logic,
+@@ -97,7 +96,6 @@ impl<'a> ConditionStateMachine<'a> {
+                 ctx_idx: machine_idx,
+             };
+             machines.push(machine);
+-            machine_idx += 1;
+         }
+ 
+         Self {
+diff --git a/crates/hyperswitch_connectors/src/connectors/bankofamerica/transformers.rs b/crates/hyperswitch_connectors/src/connectors/bankofamerica/transformers.rs
+index 531448ab3ea..901b2974741 100644
+--- a/crates/hyperswitch_connectors/src/connectors/bankofamerica/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/bankofamerica/transformers.rs
+@@ -707,16 +707,13 @@ impl From<&SetupMandateRouterData> for ClientReferenceInformation {
+ fn convert_metadata_to_merchant_defined_info(metadata: Value) -> Vec<MerchantDefinedInformation> {
+     let hashmap: std::collections::BTreeMap<String, Value> =
+         serde_json::from_str(&metadata.to_string()).unwrap_or(std::collections::BTreeMap::new());
+-    let mut vector = Vec::new();
+-    let mut iter = 1;
+-    for (key, value) in hashmap {
+-        vector.push(MerchantDefinedInformation {
++    (1..)
++        .zip(hashmap)
++        .map(|(iter, (key, value))| MerchantDefinedInformation {
+             key: iter,
+             value: format!("{key}={value}"),
+-        });
+-        iter += 1;
+-    }
+-    vector
++        })
++        .collect()
+ }
+ 
+ #[derive(Clone, Debug, Deserialize, Serialize)]
+diff --git a/crates/hyperswitch_connectors/src/connectors/barclaycard/transformers.rs b/crates/hyperswitch_connectors/src/connectors/barclaycard/transformers.rs
+index 55c1e525b19..29d5b9ca633 100644
+--- a/crates/hyperswitch_connectors/src/connectors/barclaycard/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/barclaycard/transformers.rs
+@@ -524,16 +524,13 @@ impl From<common_enums::DecoupledAuthenticationType> for EffectiveAuthentication
+ fn convert_metadata_to_merchant_defined_info(metadata: Value) -> Vec<MerchantDefinedInformation> {
+     let hashmap: std::collections::BTreeMap<String, Value> =
+         serde_json::from_str(&metadata.to_string()).unwrap_or(std::collections::BTreeMap::new());
+-    let mut vector = Vec::new();
+-    let mut iter = 1;
+-    for (key, value) in hashmap {
+-        vector.push(MerchantDefinedInformation {
++    (1..)
++        .zip(hashmap)
++        .map(|(iter, (key, value))| MerchantDefinedInformation {
+             key: iter,
+             value: format!("{key}={value}"),
+-        });
+-        iter += 1;
+-    }
+-    vector
++        })
++        .collect()
+ }
+ 
+ #[derive(Clone, Debug, Deserialize, Serialize)]
+diff --git a/crates/hyperswitch_connectors/src/connectors/wellsfargo/transformers.rs b/crates/hyperswitch_connectors/src/connectors/wellsfargo/transformers.rs
+index 77af32778b1..80f98e0b293 100644
+--- a/crates/hyperswitch_connectors/src/connectors/wellsfargo/transformers.rs
++++ b/crates/hyperswitch_connectors/src/connectors/wellsfargo/transformers.rs
+@@ -901,16 +901,13 @@ fn build_bill_to(
+ fn convert_metadata_to_merchant_defined_info(metadata: Value) -> Vec<MerchantDefinedInformation> {
+     let hashmap: std::collections::BTreeMap<String, Value> =
+         serde_json::from_str(&metadata.to_string()).unwrap_or(std::collections::BTreeMap::new());
+-    let mut vector = Vec::new();
+-    let mut iter = 1;
+-    for (key, value) in hashmap {
+-        vector.push(MerchantDefinedInformation {
++    (1..)
++        .zip(hashmap)
++        .map(|(iter, (key, value))| MerchantDefinedInformation {
+             key: iter,
+             value: format!("{key}={value}"),
+-        });
+-        iter += 1;
+-    }
+-    vector
++        })
++        .collect()
+ }
+ 
+ impl
+diff --git a/crates/redis_interface/src/commands.rs b/crates/redis_interface/src/commands.rs
+index ad26c9cd1b1..c54980a3c79 100644
+--- a/crates/redis_interface/src/commands.rs
++++ b/crates/redis_interface/src/commands.rs
+@@ -622,7 +622,7 @@ impl super::RedisConnectionPool {
+                         let v = v.take_results()?;
+ 
+                         let v: Vec<String> =
+-                            v.iter().filter_map(|(_, val)| val.as_string()).collect();
++                            v.values().filter_map(|val| val.as_string()).collect();
+                         Some(futures::stream::iter(v))
+                     }
+                     Err(err) => {
+diff --git a/crates/router/src/core/payment_methods/tokenize.rs b/crates/router/src/core/payment_methods/tokenize.rs
+index 43ed23eb891..6632f8848bc 100644
+--- a/crates/router/src/core/payment_methods/tokenize.rs
++++ b/crates/router/src/core/payment_methods/tokenize.rs
+@@ -101,7 +101,7 @@ pub async fn tokenize_cards(
+     use futures::stream::StreamExt;
+ 
+     // Process all records in parallel
+-    let responses = futures::stream::iter(records.into_iter())
++    let responses = futures::stream::iter(records)
+         .map(|record| async move {
+             let tokenize_request = record.data.clone();
+             let customer = record.customer.clone();
+diff --git a/crates/router/src/core/payments.rs b/crates/router/src/core/payments.rs
+index cecc8302b44..2f4f0c8549e 100644
+--- a/crates/router/src/core/payments.rs
++++ b/crates/router/src/core/payments.rs
+@@ -8449,8 +8449,8 @@ pub async fn revenue_recovery_list_payments(
+ 
+             let data: Vec<api_models::payments::RecoveryPaymentsListResponseItem> = list
+                 .into_iter()
+-                .zip(workflow_results.into_iter())
+-                .zip(billing_connector_results.into_iter())
++                .zip(workflow_results)
++                .zip(billing_connector_results)
+                 .map(
+                     |(
+                         ((payment_intent, payment_attempt), workflow_result),
+diff --git a/crates/storage_impl/src/merchant_account.rs b/crates/storage_impl/src/merchant_account.rs
+index 250c44300d1..5ec5063539c 100644
+--- a/crates/storage_impl/src/merchant_account.rs
++++ b/crates/storage_impl/src/merchant_account.rs
+@@ -834,8 +834,8 @@ async fn publish_and_redact_merchant_account_cache(
+         merchant_account.get_id().get_string_repr().into(),
+     )];
+ 
+-    cache_keys.extend(publishable_key.into_iter());
+-    cache_keys.extend(cgraph_key.into_iter());
++    cache_keys.extend(publishable_key);
++    cache_keys.extend(cgraph_key);
+ 
+     cache::redact_from_redis_and_publish(store, cache_keys).await?;
+     Ok(())
+diff --git a/crates/storage_impl/src/payments/payment_attempt.rs b/crates/storage_impl/src/payments/payment_attempt.rs
+index a14e528d8da..7461c8625ae 100644
+--- a/crates/storage_impl/src/payments/payment_attempt.rs
++++ b/crates/storage_impl/src/payments/payment_attempt.rs
+@@ -1320,7 +1320,7 @@ impl<T: DatabaseStore> PaymentAttemptInterface for KVRouterStore<T> {
+                     .await?
+                     .try_into_scan();
+                     let diesel_payment_attempt = kv_result.and_then(|mut payment_attempts| {
+-                        payment_attempts.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
++                        payment_attempts.sort_by_key(|x| std::cmp::Reverse(x.modified_at));
+                         payment_attempts
+                             .iter()
+                             .find(|&pa| pa.status == api_models::enums::AttemptStatus::Charged)
+@@ -1393,7 +1393,7 @@ impl<T: DatabaseStore> PaymentAttemptInterface for KVRouterStore<T> {
+                     .await?
+                     .try_into_scan();
+                     let diesel_payment_attempt = kv_result.and_then(|mut payment_attempts| {
+-                        payment_attempts.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
++                        payment_attempts.sort_by_key(|x| std::cmp::Reverse(x.modified_at));
+                         payment_attempts
+                             .iter()
+                             .find(|&pa| {
+@@ -1466,7 +1466,7 @@ impl<T: DatabaseStore> PaymentAttemptInterface for KVRouterStore<T> {
+                     .try_into_scan();
+ 
+                     let payment_attempt = kv_result.and_then(|mut payment_attempts| {
+-                        payment_attempts.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
++                        payment_attempts.sort_by_key(|x| std::cmp::Reverse(x.modified_at));
+                         payment_attempts
+                             .iter()
+                             .find(|&pa| {

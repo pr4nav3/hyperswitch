@@ -1,0 +1,9 @@
+{
+  "verdict": "pass",
+  "confidence": "high",
+  "issues_found": [],
+  "corrected_assessment": "",
+  "notes": "Reviewer returned empty assessment {}. Actual compilation results show cargo_check_affected PASSED (rc=0, 117.7s). The only failure was rustfmt with error 'no such command: fmt', which is unambiguously ENVIRONMENTAL (missing cargo-fmt tool installation). No agent-caused compilation errors exist. The agent's changes compile cleanly, and the rustfmt failure is not attributable to the agent's code changes.",
+  "parse_error": false,
+  "returncode": 0
+}

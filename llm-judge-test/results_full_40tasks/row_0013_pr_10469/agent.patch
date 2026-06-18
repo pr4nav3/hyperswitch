@@ -1,0 +1,171 @@
+diff --git a/api-reference/v1/openapi_spec_v1.json b/api-reference/v1/openapi_spec_v1.json
+index e2e9f8e724..a66d087a14 100644
+--- a/api-reference/v1/openapi_spec_v1.json
++++ b/api-reference/v1/openapi_spec_v1.json
+@@ -27724,11 +27724,6 @@
+             "example": "Failed while verifying the card",
+             "nullable": true
+           },
+-          "error_reason": {
+-            "type": "string",
+-            "example": "Insufficient Funds",
+-            "nullable": true
+-          },
+           "payment_experience": {
+             "allOf": [
+               {
+@@ -29297,11 +29292,6 @@
+             "example": "Failed while verifying the card",
+             "nullable": true
+           },
+-          "error_reason": {
+-            "type": "string",
+-            "example": "Insufficient Funds",
+-            "nullable": true
+-          },
+           "unified_code": {
+             "type": "string",
+             "description": "error code unified across the connectors is received here if there was an error while calling connector",
+diff --git a/crates/api_models/src/payments.rs b/crates/api_models/src/payments.rs
+index 2cc3bcf022..f6afa42563 100644
+--- a/crates/api_models/src/payments.rs
++++ b/crates/api_models/src/payments.rs
+@@ -7023,10 +7023,6 @@ pub struct PaymentsResponse {
+     #[smithy(value_type = "Option<String>")]
+     pub error_message: Option<String>,
+ 
+-    #[schema(example = "Insufficient Funds")]
+-    #[smithy(value_type = "Option<String>")]
+-    pub error_reason: Option<String>,
+-
+     /// error code unified across the connectors is received here if there was an error while calling connector
+     #[remove_in(PaymentsCreateResponseOpenApi)]
+     #[smithy(value_type = "Option<String>")]
+diff --git a/crates/hyperswitch_interfaces/src/consts.rs b/crates/hyperswitch_interfaces/src/consts.rs
+index 79eb822dc7..f5214b4db7 100644
+--- a/crates/hyperswitch_interfaces/src/consts.rs
++++ b/crates/hyperswitch_interfaces/src/consts.rs
+@@ -6,9 +6,6 @@ pub const NO_ERROR_MESSAGE: &str = "No error message";
+ /// No error code string const
+ pub const NO_ERROR_CODE: &str = "No error code";
+ 
+-/// No error reason string const
+-pub const NO_ERROR_REASON: &str = "No error reason";
+-
+ /// Accepted format for request
+ pub const ACCEPT_HEADER: &str = "text/html,application/json";
+ 
+diff --git a/crates/router/src/core/payments/transformers.rs b/crates/router/src/core/payments/transformers.rs
+index 9da558d990..809d04e7b4 100644
+--- a/crates/router/src/core/payments/transformers.rs
++++ b/crates/router/src/core/payments/transformers.rs
+@@ -3409,7 +3409,7 @@ where
+ {
+     use std::ops::Not;
+ 
+-    use hyperswitch_interfaces::consts::{NO_ERROR_CODE, NO_ERROR_MESSAGE, NO_ERROR_REASON};
++    use hyperswitch_interfaces::consts::{NO_ERROR_CODE, NO_ERROR_MESSAGE};
+ 
+     let payment_attempt = payment_data.get_payment_attempt().clone();
+     let payment_intent = payment_data.get_payment_intent().clone();
+@@ -3943,11 +3943,9 @@ where
+                 .error_code
+                 .filter(|code| code != NO_ERROR_CODE),
+             error_message: payment_attempt
+-                .error_message
+-                .filter(|message| message != NO_ERROR_MESSAGE),
+-            error_reason: payment_attempt
+                 .error_reason
+-                .filter(|reason| reason != NO_ERROR_REASON),
++                .or(payment_attempt.error_message)
++                .filter(|message| message != NO_ERROR_MESSAGE),
+             unified_code: payment_attempt.unified_code,
+             unified_message: payment_attempt.unified_message,
+             payment_experience: payment_attempt.payment_experience,
+@@ -4285,7 +4283,6 @@ impl ForeignFrom<(storage::PaymentIntent, storage::PaymentAttempt)> for api::Pay
+             cancellation_reason: None,
+             error_code: None,
+             error_message: None,
+-            error_reason: None,
+             unified_code: None,
+             unified_message: None,
+             payment_experience: None,
+diff --git a/crates/router/src/db/events.rs b/crates/router/src/db/events.rs
+index e41e29f1ae..069fb0cf88 100644
+--- a/crates/router/src/db/events.rs
++++ b/crates/router/src/db/events.rs
+@@ -1343,7 +1343,6 @@ mod tests {
+             cancellation_reason: None,
+             error_code: None,
+             error_message: None,
+-            error_reason: None,
+             unified_code: None,
+             unified_message: None,
+             payment_experience: None,
+diff --git a/crates/router/tests/payments.rs b/crates/router/tests/payments.rs
+index d0378802be..a07febbc1c 100644
+--- a/crates/router/tests/payments.rs
++++ b/crates/router/tests/payments.rs
+@@ -411,7 +411,6 @@ async fn payments_create_core() {
+         cancellation_reason: None,
+         error_code: None,
+         error_message: None,
+-        error_reason: None,
+         unified_code: None,
+         unified_message: None,
+         payment_experience: None,
+@@ -703,7 +702,6 @@ async fn payments_create_core_adyen_no_redirect() {
+             cancellation_reason: None,
+             error_code: None,
+             error_message: None,
+-            error_reason: None,
+             unified_code: None,
+             unified_message: None,
+             payment_experience: None,
+diff --git a/crates/router/tests/payments2.rs b/crates/router/tests/payments2.rs
+index a571b9dbe8..ef74cdef1c 100644
+--- a/crates/router/tests/payments2.rs
++++ b/crates/router/tests/payments2.rs
+@@ -171,7 +171,6 @@ async fn payments_create_core() {
+         cancellation_reason: None,
+         error_code: None,
+         error_message: None,
+-        error_reason: None,
+         unified_code: None,
+         unified_message: None,
+         payment_experience: None,
+@@ -472,7 +471,6 @@ async fn payments_create_core_adyen_no_redirect() {
+             cancellation_reason: None,
+             error_code: None,
+             error_message: None,
+-            error_reason: None,
+             unified_code: None,
+             unified_message: None,
+             payment_experience: None,
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Cybersource.js b/cypress-tests/cypress/e2e/configs/Payment/Cybersource.js
+index e074fe1c4c..877d5dc5df 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Cybersource.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Cybersource.js
+@@ -322,7 +322,7 @@ export const connectorDetails = {
+         body: {
+           status: "failed",
+           error_message:
+-            "Declined - One or more fields in the request contains invalid data",
++            "Declined - One or more fields in the request contains invalid data, detailed_error_information: orderInformation.billTo.administrativeArea : INVALID_DATA",
+           attempt_count: 1,
+         },
+       },
+diff --git a/cypress-tests/cypress/e2e/configs/Payment/Stripe.js b/cypress-tests/cypress/e2e/configs/Payment/Stripe.js
+index fc73f89958..d55fa0a59e 100644
+--- a/cypress-tests/cypress/e2e/configs/Payment/Stripe.js
++++ b/cypress-tests/cypress/e2e/configs/Payment/Stripe.js
+@@ -294,7 +294,8 @@ export const connectorDetails = {
+         body: {
+           status: "failed",
+           error_code: "card_declined",
+-          error_message: "Your card was declined.",
++          error_message:
++            "message - Your card was declined., decline_code - generic_decline",
+           unified_code: "UE_9000",
+           unified_message: "Something went wrong",
+         },
